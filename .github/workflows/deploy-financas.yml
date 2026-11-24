@@ -1,0 +1,43 @@
+name: Deploy Meu Financeiro Pessoal
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "public/financas/**"
+      - ".github/workflows/deploy-financas.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages-financas
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: \${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o repositório
+        uses: actions/checkout@v4
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Preparar arquivos estáticos do app
+        run: |
+          mkdir -p site
+          cp -R public/financas/. site/
+      - name: Criar artefato de publicação
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: Publicar site
+        id: deployment
+        uses: actions/deploy-pages@v4
