@@ -171,6 +171,7 @@ function showAuth(message,isError){
 }
 function enterApp(email,key,data){
  activeEmail=email;cryptoKey=key;session={user:{id:email,email:email}};
+ $('#auth-password').value='';
  state=Object.assign(blank(),data||{});
  $('#auth-screen').classList.add('hidden');$('#app-shell').classList.remove('hidden');
  renderAll();renderSettings();
