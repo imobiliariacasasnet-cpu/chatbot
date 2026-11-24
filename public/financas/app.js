@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-var USER_PREFIX='mfp_user_',state=blank(),sb=null,session=null,pending=[],timer=null,activationSeq=0,authSubscription=null;
+var USER_PREFIX='mfp_user_',state=blank(),sb=null,session=null,pending=[],timer=null,activationSeq=0,authSubscription=null,authMode='login';
 var $=function(s){return document.querySelector(s)},$$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s))};
 var cats={income:['Salário','Comissões','Freelance','Investimentos','Aluguel recebido','Reembolso','Outras receitas'],expense:['Moradia','Alimentação','Transporte','Contas','Saúde','Educação','Lazer','Compras','Assinaturas','Impostos','Dívidas','Cartão de crédito','Outras despesas']};
 function blank(){return {transactions:[],budgets:[],goals:[],cards:[],debts:[]}}
@@ -142,7 +142,7 @@ async function activateSession(s){
    }
    try{localStorage.setItem(USER_PREFIX+s.user.id,JSON.stringify(state))}catch(e){}
    $('#auth-screen').classList.add('hidden');$('#app-shell').classList.remove('hidden');
-   $('#auth-title').textContent='Bem-vindo de volta';setAuthMessage('');
+   authMode='login';$('#auth-title').textContent='Bem-vindo de volta';$('#auth-intro').textContent='Entre na sua conta para acessar seus dados financeiros com segurança.';$('#auth-login').textContent='Entrar';$('#auth-signup').classList.remove('hidden');$('#auth-forgot').classList.remove('hidden');setAuthMessage('');
    renderAll();renderSettings();$('#cloud-message').textContent='Dados carregados e vinculados à sua conta.';
  }catch(e){
    setAuthMessage('Não foi possível carregar seus dados: '+(e.message||'erro de conexão'),true);
@@ -164,6 +164,7 @@ async function setupCloud(){
      if(event==='INITIAL_SESSION'){if(s)setTimeout(function(){activateSession(s)},0);else lockApp('')}
      else if(event==='SIGNED_IN'&&s){setTimeout(function(){activateSession(s)},0)}
      else if(event==='SIGNED_OUT'){lockApp('Você saiu da sua conta.')}
+     else if(event==='PASSWORD_RECOVERY'&&s){session=s;authMode='recovery';$('#auth-title').textContent='Redefinir sua senha';$('#auth-intro').textContent='Escolha uma nova senha para sua conta.';$('#auth-login').textContent='Atualizar senha';$('#auth-signup').classList.add('hidden');$('#auth-forgot').classList.add('hidden');showAuth('Digite sua nova senha abaixo.',false)}
      else if(event==='TOKEN_REFRESHED'&&s){session=s}
    });
    authSubscription=sub.data.subscription;
@@ -174,10 +175,17 @@ async function login(e){
  if(!sb){setAuthMessage('O login ainda não está configurado.',true);return}
  var email=$('#auth-email').value.trim(),password=$('#auth-password').value;
  if(!email||password.length<8){setAuthMessage('Informe seu e-mail e uma senha com pelo menos 8 caracteres.',true);return}
- $('#auth-login').disabled=true;$('#auth-login').textContent='Entrando…';setAuthMessage('Validando seu acesso…',false);
- try{var r=await sb.auth.signInWithPassword({email:email,password:password});if(r.error)throw r.error;if(!r.data.session)setAuthMessage('Login realizado. Aguarde a confirmação do acesso.',false)}
- catch(e){setAuthMessage(e.message||'Não foi possível entrar. Confira seu e-mail e senha.',true)}
- finally{$('#auth-login').disabled=false;$('#auth-login').textContent='Entrar'}
+ $('#auth-login').disabled=true;$('#auth-login').textContent=authMode==='recovery'?'Atualizando…':'Entrando…';setAuthMessage(authMode==='recovery'?'Atualizando sua senha…':'Validando seu acesso…',false);
+ try{
+   if(authMode==='recovery'){
+     var changed=await sb.auth.updateUser({password:password});if(changed.error)throw changed.error;
+     authMode='login';$('#auth-title').textContent='Bem-vindo de volta';$('#auth-intro').textContent='Entre na sua conta para acessar seus dados financeiros com segurança.';$('#auth-signup').classList.remove('hidden');$('#auth-forgot').classList.remove('hidden');
+     var current=await sb.auth.getSession();if(current.data.session)await activateSession(current.data.session);setAuthMessage('Senha atualizada com sucesso.',false);
+   }else{
+     var r=await sb.auth.signInWithPassword({email:email,password:password});if(r.error)throw r.error;if(!r.data.session)setAuthMessage('Login realizado. Aguarde a confirmação do acesso.',false)
+   }
+ }catch(e){setAuthMessage(e.message||'Não foi possível entrar. Confira seu e-mail e senha.',true)}
+ finally{$('#auth-login').disabled=false;$('#auth-login').textContent=authMode==='recovery'?'Atualizar senha':'Entrar'}
 }
 async function createAccount(){
  if(!sb){setAuthMessage('O login ainda não está configurado.',true);return}
