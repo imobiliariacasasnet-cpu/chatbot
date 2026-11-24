@@ -1,43 +1,57 @@
 # Meu Financeiro Pessoal
 
-Aplicativo web responsivo, instalável como PWA, com interface em português e moeda BRL.
+Aplicativo web responsivo e instalável como PWA, em português e com moeda BRL.
 
-## O que está implementado
-- Dashboard com receitas, despesas, saldo, taxa de economia e gráficos por dia/categoria.
-- Lançamentos de receitas/despesas, pesquisa, filtro, exclusão e categorias.
-- Orçamentos por categoria, metas de poupança, cartões (cadastro de limite/dias) e registro de dívidas/pagamentos.
-- Importação local de arquivos CSV e OFX, pré-visualização antes de importar e verificação aproximada de duplicidades.
-- Exportação/restauração de backup JSON.
-- Armazenamento local no navegador, funcionamento básico offline e tela para configurar Supabase Auth + sincronização.
+## Recursos
+- Dashboard com receitas, despesas, saldo, taxa de economia e gráficos.
+- Lançamentos, filtros, categorias e importação de extratos CSV/OFX.
+- Orçamentos, metas financeiras, cartões e dívidas.
+- Backup e restauração por arquivo JSON.
+- Login obrigatório por e-mail e senha, criação de conta e recuperação de senha.
+- Dados carregados e salvos por conta, com Row Level Security (RLS) no Supabase.
 
-## Testar
-A pasta está em \`public/financas\` do repositório. Para teste local, sirva esta pasta via HTTP (não abra o arquivo como \`file://\` porque PWA/service worker exigem HTTP/HTTPS):
-\`\`\`bash
+## Configuração única do administrador (obrigatória antes de liberar usuários)
+1. Crie um projeto em https://supabase.com/.
+2. No painel do projeto, abra **SQL Editor** e execute todo o conteúdo de `supabase.sql`.
+3. Em **Project Settings → API**, copie a **Project URL** e a chave **Publishable** (que começa com `sb_publishable_`) ou a chave pública `anon` legada.
+4. Abra `config.js` neste repositório e preencha:
+   - `url`: Project URL.
+   - `anonKey`: chave pública Publishable/anon.
+5. Nunca coloque `service_role`, secret key ou senha do banco em `config.js`. A chave pública pode ficar no frontend porque o acesso aos dados é protegido pelas políticas RLS.
+6. Em **Authentication → URL Configuration**, defina como Site URL:
+   `https://imobiliariacasasnet-cpu.github.io/chatbot/`
+   e adicione esse mesmo endereço em Redirect URLs.
+7. Em **Authentication → Sign In / Providers**, mantenha Email habilitado e confirme os e-mails dos usuários.
+8. Salve `config.js` no GitHub. A publicação automática será executada; depois acesse o app e crie a conta de administrador.
+
+## Como funciona a separação de dados
+- O aplicativo não mostra o painel sem uma sessão autenticada.
+- Cada conta possui uma linha própria em `finance_data`, identificada pelo ID do usuário autenticado.
+- O banco exige `auth.uid() = user_id` para leitura, inserção e alteração. Não há política para usuários anônimos.
+- O app grava cópias locais apenas com uma chave derivada do ID daquela conta e sempre busca o estado principal da nuvem após o login.
+- Ao sair, o estado em memória é limpo. Nenhum dado local antigo é atribuído automaticamente à primeira conta, para evitar transferir dados de outra pessoa num dispositivo compartilhado.
+- O payload completo é sincronizado como um documento JSON por usuário. Não há edição simultânea/merge em tempo real; evite editar a mesma conta em vários dispositivos ao mesmo tempo.
+
+## E-mail de confirmação e limites
+Em projetos hospedados, a confirmação de e-mail costuma vir ativada. O serviço de e-mail padrão do Supabase é apenas para testes: atualmente envia somente para membros da organização e tem limite de 2 e-mails por hora. Para permitir cadastro/recuperação de senha de usuários externos em produção, configure um provedor SMTP próprio no Supabase. Consulte a documentação atual de [SMTP personalizado](https://supabase.com/docs/guides/auth/auth-smtp) e [limites do Auth](https://supabase.com/docs/guides/auth/rate-limits).
+
+## Testar localmente
+Sirva a pasta por HTTP (não abra por `file://`, pois o PWA/service worker exige HTTP/HTTPS):
+```bash
 cd public/financas
 python -m http.server 8000
-\`\`\`
-Abra \`http://localhost:8000\`.
+```
+Abra `http://localhost:8000`.
 
-## Publicar
-Quando o projeto hospedeiro for implantado, acesse o caminho \`/financas/\` do mesmo domínio. Como os arquivos vivem em \`public/financas\` num projeto Next.js existente, serão servidos como arquivos estáticos em \`/financas/\` após o build e implantação habituais do projeto hospedeiro. O commit dos arquivos não significa que o site já esteja publicado nem altera por si só o domínio de hospedagem.
-
-## Sincronização na nuvem (opcional)
-1. Crie um projeto no [Supabase](https://supabase.com/).
-2. No SQL Editor do projeto, execute o arquivo \`supabase.sql\`.
-3. Em Project Settings / API, copie Project URL e a chave pública (anon/publishable). Nunca use \`service_role\` no navegador.
-4. Abra Configurações no app, informe URL/chave pública e salve.
-5. Crie uma conta com e-mail e senha. Se a confirmação por e-mail estiver habilitada, confirme o e-mail antes de entrar.
-6. Quando perguntado pela primeira vez, escolha se deseja enviar o estado local para essa conta. Se houver dados na nuvem, o app carrega o estado da nuvem para o navegador atual.
-
-A tabela usa Row Level Security (RLS) e limita cada linha à conta autenticada. O conteúdo financeiro é guardado num payload JSON por utilizador; este MVP sincroniza o payload inteiro e não possui mecanismo de edição simultânea/merge entre dispositivos. Evite editar a mesma conta em vários dispositivos ao mesmo tempo.
+## Publicação
+O fluxo `.github/workflows/deploy-financas.yml` publica os arquivos estáticos via GitHub Pages na raiz do site:
+`https://imobiliariacasasnet-cpu.github.io/chatbot/`.
 
 ## Importação CSV / OFX
-O app não se conecta diretamente ao banco. Exporte um arquivo do internet banking e importe-o aqui. CSV deve conter colunas de data, descrição, valor, e opcionalmente tipo e categoria. Prefira o modelo fornecido. Os formatos de exportação variam por banco e podem precisar de ajustes. Revise tudo antes de confirmar. Arquivos são lidos no navegador; não envie senhas bancárias ou dados desnecessários.
+O app não se conecta diretamente ao banco. Exporte um arquivo do internet banking e importe-o. O CSV deve conter colunas de data, descrição, valor e, opcionalmente, tipo e categoria. Os formatos variam por banco; revise a prévia antes de confirmar. Nunca envie senhas bancárias.
 
-## Limites e segurança
-- Dados locais ficam no armazenamento do navegador; apagar dados do site ou perder o dispositivo pode apagá-los. Exporte backups regularmente.
-- A nuvem depende de uma conta/projeto Supabase e de seus limites de plano.
+## Segurança e limites
 - Não armazene senhas bancárias, números completos de cartão, CVV ou outros segredos.
 - Cartões são registros informativos: o app não calcula ciclo de fatura completo, parcelamentos, juros ou pagamentos automáticos.
 - Não há integração automática Open Finance; a importação é por arquivo.
-- Antes de uso financeiro sensível, teste com dados fictícios, valide os extratos de cada banco e mantenha backups.
+- Exporte backups regularmente e teste com dados fictícios antes de usar dados financeiros importantes.
