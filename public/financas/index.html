@@ -11,7 +11,24 @@
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-<div class="app">
+<section id="auth-screen" class="auth-screen">
+  <div class="auth-card">
+    <a href="#" class="brand auth-brand"><span class="brand-icon">M</span><span><b>Meu Financeiro</b><small>CONTROLE PESSOAL</small></span></a>
+    <p class="eyebrow">SEU ESPAÇO FINANCEIRO</p>
+    <h1 id="auth-title">Bem-vindo de volta</h1>
+    <p class="auth-intro">Entre na sua conta para acessar seus dados financeiros com segurança.</p>
+    <div id="auth-config-warning" class="auth-alert hidden"><b>Configuração necessária</b><p>O administrador precisa conectar este aplicativo ao projeto Supabase. Depois disso, cada pessoa poderá criar sua própria conta.</p></div>
+    <form id="auth-form" class="auth-form">
+      <label class="field-label">E-mail<input id="auth-email" type="email" autocomplete="username" required placeholder="voce@exemplo.com"></label>
+      <label class="field-label">Senha<input id="auth-password" type="password" autocomplete="current-password" minlength="8" required placeholder="Sua senha (mínimo 8 caracteres)"></label>
+      <button class="btn primary full auth-submit" id="auth-login" type="submit">Entrar</button>
+    </form>
+    <div class="auth-actions"><button type="button" class="link-btn" id="auth-signup">Criar minha conta</button><button type="button" class="link-btn" id="auth-forgot">Esqueci minha senha</button></div>
+    <div id="auth-message" class="auth-message" role="status" aria-live="polite"></div>
+    <p class="auth-privacy">Seus dados ficam vinculados à sua conta. Outros usuários não conseguem visualizar seus lançamentos.</p>
+  </div>
+</section>
+<div class="app hidden" id="app-shell">
 <aside class="sidebar" id="sidebar">
 <a href="#dashboard" class="brand"><span class="brand-icon">M</span><span><b>Meu Financeiro</b><small>CONTROLE PESSOAL</small></span></a>
 <div class="nav-label">MENU PRINCIPAL</div>
@@ -26,7 +43,7 @@
 <div class="sidebar-bottom"><div class="tip"><b>Um passo de cada vez.</b><p>Mais clareza para tomar decisões com tranquilidade.</p></div><button class="nav-link" data-page="settings"><span>⚙</span> Configurações</button><div class="storage-indicator"><i></i><span id="storage-label">Salvo neste dispositivo</span></div></div>
 </aside>
 <main class="main">
-<header class="topbar"><button class="icon-btn mobile-menu" id="mobile-menu" aria-label="Abrir menu">☰</button><div class="crumb">Finanças pessoais <span>/</span> <b id="crumb-label">Visão geral</b></div><div class="top-actions"><button class="icon-btn" id="backup-top" title="Exportar backup" aria-label="Exportar backup">⇩</button><div class="avatar">MF</div></div></header>
+<header class="topbar"><button class="icon-btn mobile-menu" id="mobile-menu" aria-label="Abrir menu">☰</button><div class="crumb">Finanças pessoais <span>/</span> <b id="crumb-label">Visão geral</b></div><div class="top-actions"><span class="account-email" id="account-email"></span><button class="icon-btn" id="backup-top" title="Exportar backup" aria-label="Exportar backup">⇩</button><button class="btn secondary small" id="logout-button" type="button">Sair</button></div></header>
 <section class="page active" id="page-dashboard">
 <div class="page-heading"><div><p class="eyebrow">SEU RESUMO FINANCEIRO</p><h1>Visão geral</h1><p class="sub">Acompanhe seu dinheiro e organize os próximos passos.</p></div><div class="heading-actions"><label class="month-field">Período<input type="month" id="month-picker"></label><button class="btn primary" data-new-transaction>＋ Novo lançamento</button></div></div>
 <div class="metrics">
@@ -58,12 +75,12 @@
 <section class="page" id="page-settings">
 <div class="page-heading"><div><p class="eyebrow">PRIVACIDADE E PREFERÊNCIAS</p><h1>Configurações</h1><p class="sub">Gerencie seus dados e a sincronização na nuvem.</p></div></div>
 <div class="settings-grid"><article class="panel"><h2>Seus dados</h2><p class="sub">Faça cópias de segurança ou restaure um backup anterior.</p><div class="setting-row"><div><b>Exportar backup</b><p>Salve lançamentos, metas, orçamentos e cartões em JSON.</p></div><button class="btn secondary" id="export-backup">Exportar</button></div><div class="setting-row"><div><b>Restaurar backup</b><p>Importe um backup JSON deste aplicativo.</p></div><label class="btn secondary file-button">Selecionar arquivo<input type="file" id="restore-file" accept=".json,application/json"></label></div><div class="setting-row danger-row"><div><b>Apagar dados locais</b><p>Remove os dados deste navegador.</p></div><button class="btn danger" id="clear-data">Apagar dados</button></div></article>
-<article class="panel"><h2>Sincronização na nuvem</h2><p class="sub">Conecte seu projeto Supabase gratuito para sincronizar seus dados entre dispositivos.</p><div class="cloud-status" id="cloud-status"><i></i><div><b id="cloud-status-title">Modo local ativo</b><p id="cloud-status-text">Seus dados ficam neste navegador.</p></div></div><label class="field-label">URL do projeto Supabase<input id="supabase-url" type="url" placeholder="https://seu-projeto.supabase.co"></label><label class="field-label">Chave pública (anon/publishable)<input id="supabase-key" type="password" autocomplete="off" placeholder="Cole aqui a chave pública"></label><button class="btn secondary full" id="save-cloud-config">Salvar configuração</button><div class="auth-fields"><label class="field-label">E-mail<input id="auth-email" type="email" autocomplete="email" placeholder="voce@exemplo.com"></label><label class="field-label">Senha<input id="auth-password" type="password" autocomplete="current-password" placeholder="Mínimo de 8 caracteres"></label><div class="button-row"><button class="btn primary" id="cloud-login">Entrar</button><button class="btn secondary" id="cloud-signup">Criar conta</button><button class="btn secondary hidden" id="cloud-logout">Sair</button></div><button class="btn secondary full" id="cloud-sync">Sincronizar agora</button><p class="helper" id="cloud-message">A nuvem só funciona após criar o projeto, executar o SQL incluído e configurar URL/chave pública.</p></div></article></div>
+<article class="panel"><h2>Sua conta</h2><p class="sub">Seus dados são sincronizados com segurança e ficam separados por usuário.</p><div class="cloud-status" id="cloud-status"><i></i><div><b id="cloud-status-title">Conectando à sua conta</b><p id="cloud-status-text">Aguardando autenticação.</p></div></div><div class="setting-row"><div><b>Conta conectada</b><p id="settings-account-email">—</p></div><button class="btn secondary" id="settings-logout" type="button">Sair da conta</button></div><div class="setting-row"><div><b>Sincronização</b><p id="cloud-message">Seus dados são salvos na nuvem depois de cada alteração.</p></div><button class="btn secondary" id="cloud-sync" type="button">Sincronizar agora</button></div></article></div>
 <article class="privacy-banner"><span>♢</span><div><b>Privacidade primeiro</b><p>Não guarde senhas bancárias, números completos de cartões ou códigos de segurança. No modo local, os dados ficam no navegador e podem ser perdidos se limpar os dados do site. Para sincronização, habilite as políticas RLS do SQL incluído.</p></div></article>
 </section>
 <footer class="footer"><span>Meu Financeiro Pessoal</span><span>Organização financeira começa com clareza.</span></footer>
 </main></div>
 <div class="modal-backdrop hidden" id="transaction-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal"><div class="modal-head"><div><p class="eyebrow">NOVA MOVIMENTAÇÃO</p><h2 id="modal-title">Novo lançamento</h2></div><button class="icon-btn" id="close-modal" aria-label="Fechar">×</button></div><form id="transaction-form"><div class="form-grid"><label class="field-label">Tipo<select id="form-type"><option value="expense">Despesa</option><option value="income">Receita</option></select></label><label class="field-label">Valor (R$)<input id="form-amount" type="number" min="0.01" step="0.01" required placeholder="0,00"></label><label class="field-label wide">Descrição<input id="form-description" required maxlength="140" placeholder="Ex.: supermercado"></label><label class="field-label">Categoria<select id="form-category"></select></label><label class="field-label">Data<input id="form-date" type="date" required></label></div><div class="form-actions"><button type="button" class="btn secondary" id="cancel-modal">Cancelar</button><button type="submit" class="btn primary">Salvar lançamento</button></div></form></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="./app.js"></script><script>if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){window.addEventListener('load',function(){navigator.serviceWorker.register('./service-worker.js').catch(function(){})})}</script>
+<script src="./config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="./app.js"></script><script>if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){window.addEventListener('load',function(){navigator.serviceWorker.register('./service-worker.js').catch(function(){})})}</script>
 </body></html>
