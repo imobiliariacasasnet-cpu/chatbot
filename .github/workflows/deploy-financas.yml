@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -45,6 +46,23 @@ jobs:
         with:
           name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
           path: site
+
+      - name: Aguardar o artefato ficar visível na API do GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_ARTIFACT: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          for attempt in {1..12}; do
+            echo "Verificação ${attempt}/12: procurando ${EXPECTED_ARTIFACT}"
+            artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" --jq '.artifacts[] | select(.name == env.EXPECTED_ARTIFACT) | .id' | head -n 1)"
+            if [ -n "${artifact_id}" ]; then
+              echo "Artefato localizado: ${artifact_id}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::O artefato não ficou disponível na API após 60 segundos."
+          exit 1
 
       - name: Publicar no GitHub Pages
         id: deployment
