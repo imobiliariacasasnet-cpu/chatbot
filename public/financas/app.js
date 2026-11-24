@@ -17,7 +17,7 @@ function toast(s){var e=$('#toast');e.textContent=s;e.classList.add('show');clea
 function save(){
  if(!activeEmail||!cryptoKey){toast('Entre na sua conta neste dispositivo para salvar.');return false}
  var email=activeEmail,key=cryptoKey,snapshot=JSON.stringify(state);
- saveQueue=saveQueue.catch(function(){}).then(async function(){
+ saveQueue=saveQueue.catch(function(){return false}).then(async function(){
    var accounts=getDeviceAccounts(),record=accounts[email];
    if(!record)throw new Error('Conta local não encontrada.');
    var encrypted=await encryptData(email,key,record.salt,snapshot);
@@ -25,10 +25,11 @@ function save(){
    localStorage.setItem(ACCOUNT_KEY,JSON.stringify(accounts));
    $('#cloud-message').textContent='Salvo com criptografia neste dispositivo.';
    $('#storage-label').textContent='Salvo neste dispositivo';
+   return true;
  }).catch(function(e){
    $('#cloud-message').textContent='Falha ao salvar neste dispositivo: '+(e.message||'erro de armazenamento');
    toast('Não foi possível salvar. Exporte um backup.');
-   throw e;
+   return false;
  });
  return true;
 }
@@ -224,12 +225,14 @@ function forgotPassword(){
 async function saveToDevice(){
  if(!session){toast('Entre na sua conta primeiro.');return}
  save();
- try{await saveQueue;toast('Dados salvos neste dispositivo.')}catch(e){toast('Falha ao salvar. Exporte um backup e tente novamente.')}
+ var saved=await saveQueue;
+ if(saved)toast('Dados salvos neste dispositivo.');else toast('Falha ao salvar. Exporte um backup e tente novamente.')
 }
 async function logout(){
  if(!session)return;
  save();
- try{await saveQueue}catch(e){toast('Não saí da conta porque o último salvamento falhou. Exporte um backup e tente novamente.');return}
+ var saved=await saveQueue;
+ if(!saved){toast('Não saí da conta porque o último salvamento falhou. Exporte um backup e tente novamente.');return}
  state=blank();session=null;activeEmail=null;cryptoKey=null;
  $('#auth-password').value='';
  renderSettings();showAuth('Você saiu da sua conta neste dispositivo.',false);
@@ -247,7 +250,7 @@ async function importLegacyData(){
    state.goals=state.goals.concat(legacy.goals||[]);
    state.cards=state.cards.concat(legacy.cards||[]);
    state.debts=state.debts.concat(legacy.debts||[]);
-   save();await saveQueue;localStorage.removeItem(LEGACY_PENDING);renderAll();toast('Dados antigos importados e criptografados.');
+   save();var saved=await saveQueue;if(!saved)throw new Error('Não foi possível salvar os dados importados.');localStorage.removeItem(LEGACY_PENDING);renderAll();toast('Dados antigos importados e criptografados.');
  }catch(e){toast('Não foi possível importar os dados antigos.')}
 }
 function wire(){
