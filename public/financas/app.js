@@ -1,10 +1,10 @@
 (function(){
 'use strict';
-var USER_PREFIX='mfp_user_',KEY='mfp_local_v1',state=blank(),sb=null,session=null,pending=[],timer=null,activationSeq=0,authSubscription=null,authMode='login',localOnlyMode=false;
+var ACCOUNT_KEY='mfp_device_accounts_v1',LEGACY_KEY='mfp_local_v1',LEGACY_PENDING='mfp_legacy_pending_v1',state=blank(),session=null,activeEmail=null,cryptoKey=null,pending=[],timer=null,saveQueue=Promise.resolve();
 var $=function(s){return document.querySelector(s)},$$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s))};
 var cats={income:['Salário','Comissões','Freelance','Investimentos','Aluguel recebido','Reembolso','Outras receitas'],expense:['Moradia','Alimentação','Transporte','Contas','Saúde','Educação','Lazer','Compras','Assinaturas','Impostos','Dívidas','Cartão de crédito','Outras despesas']};
 function blank(){return {transactions:[],budgets:[],goals:[],cards:[],debts:[]}}
-function loadState(){try{return Object.assign(blank(),JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){return blank()}}
+function loadLegacyState(){try{return Object.assign(blank(),JSON.parse(localStorage.getItem(LEGACY_KEY)||'{}'))}catch(e){return blank()}}
 function id(){return crypto&&crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2)}
 function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function brl(n){return Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
@@ -14,7 +14,23 @@ function month(v){return String(v||'').slice(0,7)}
 function dateBR(v){if(!v)return '—';var a=String(v).slice(0,10).split('-');return a.length===3?a[2]+'/'+a[1]+'/'+a[0]:v}
 function total(arr,type){return arr.filter(function(x){return !type||x.type===type}).reduce(function(a,x){return a+Number(x.amount||0)},0)}
 function toast(s){var e=$('#toast');e.textContent=s;e.classList.add('show');clearTimeout(timer);timer=setTimeout(function(){e.classList.remove('show')},3200)}
-function save(sync){if(localOnlyMode){try{localStorage.setItem(KEY,JSON.stringify(state));$('#cloud-message').textContent='Modo local: dados salvos somente neste navegador.'}catch(e){toast('Não foi possível salvar. Exporte um backup.')}return true}if(!session||!sb){toast('Entre na sua conta para salvar seus dados.');return false}try{localStorage.setItem(USER_PREFIX+session.user.id,JSON.stringify(state))}catch(e){toast('Não foi possível salvar a cópia local.')}if(sync!==false){clearTimeout(window.mfpSaveTimer);$('#cloud-message').textContent='Salvando suas alterações na nuvem…';window.mfpSaveTimer=setTimeout(syncCloud,500)}return true}
+function save(){
+ if(!activeEmail||!cryptoKey){toast('Entre na sua conta neste dispositivo para salvar.');return false}
+ var email=activeEmail,key=cryptoKey,snapshot=JSON.stringify(state);
+ saveQueue=saveQueue.catch(function(){}).then(async function(){
+   var accounts=getDeviceAccounts(),record=accounts[email];
+   if(!record)throw new Error('Conta local não encontrada.');
+   var encrypted=await encryptData(email,key,record.salt,snapshot);
+   accounts[email]=Object.assign({},record,encrypted,{updatedAt:new Date().toISOString()});
+   localStorage.setItem(ACCOUNT_KEY,JSON.stringify(accounts));
+   $('#cloud-message').textContent='Salvo com criptografia neste dispositivo.';
+   $('#storage-label').textContent='Salvo neste dispositivo';
+ }).catch(function(e){
+   $('#cloud-message').textContent='Falha ao salvar neste dispositivo: '+(e.message||'erro de armazenamento');
+   toast('Não foi possível salvar. Exporte um backup.');
+ });
+ return true;
+}
 function gotoPage(p){$$('.page').forEach(function(e){e.classList.toggle('active',e.id==='page-'+p)});$$('.nav-link[data-page]').forEach(function(e){e.classList.toggle('active',e.dataset.page===p)});var names={dashboard:'Visão geral',transactions:'Lançamentos',budgets:'Orçamentos',goals:'Metas financeiras',cards:'Cartões e dívidas',import:'Importar extrato',settings:'Configurações'};$('#crumb-label').textContent=names[p]||p;$('#sidebar').classList.remove('open');renderAll()}
 function forMonth(m){return state.transactions.filter(function(t){return month(t.date)===m})}
 function sym(c){return ({'Moradia':'⌂','Alimentação':'◉','Transporte':'↗','Contas':'ϟ','Saúde':'✚','Educação':'▤','Lazer':'✦','Compras':'◈','Salário':'⇧','Comissões':'✧','Investimentos':'↗','Dívidas':'−'})[c]||'•'}
@@ -57,21 +73,22 @@ function renderCards(){
  $('#debts-list').innerHTML=state.debts.map(function(d){return '<div class="setting-row"><div><b>'+esc(d.name)+'</b><p>'+esc(d.notes||'Dívida registrada')+'</p></div><div><b>'+brl(d.remaining)+'</b><div class="card-actions"><button class="link-btn" data-pay-debt="'+esc(d.id)+'">Pagar</button><button class="link-btn" data-delete-debt="'+esc(d.id)+'">Excluir</button></div></div></div>'}).join('');
  $('#debts-empty').classList.toggle('hidden',state.debts.length>0)
 }
-function cloudConfig(){return window.MFP_SUPABASE_CONFIG||{}}
 function renderSettings(){
- var email=localOnlyMode?'Modo local':(session&&session.user?session.user.email:'—');
+ var email=session&&session.user?session.user.email:'—';
  $('#settings-account-email').textContent=email;
  $('#account-email').textContent=email;
- $('#logout-button').classList.toggle('hidden',!!localOnlyMode);
- $('#settings-logout').classList.toggle('hidden',!!localOnlyMode);
- $('#cloud-sync').disabled=!!localOnlyMode;
- if(localOnlyMode){cloudStatus('Modo local temporário','Login multiusuário será ativado quando o Supabase for conectado.',false);$('#storage-label').textContent='Salvo neste navegador';$('#cloud-message').textContent='Os dados ficam somente neste dispositivo. A nuvem e as contas ainda não foram configuradas.'}
- else if(session){
-   cloudStatus('Conta conectada','Seus dados estão vinculados exclusivamente a esta conta.',true);
-   $('#storage-label').textContent='Conta sincronizada na nuvem';
+ $('#logout-button').classList.toggle('hidden',!session);
+ $('#settings-logout').classList.toggle('hidden',!session);
+ $('#cloud-sync').disabled=!session;
+ $('#legacy-import-row').classList.toggle('hidden',!localStorage.getItem(LEGACY_PENDING));
+ if(session){
+   cloudStatus('Dados protegidos neste dispositivo','Criptografados e disponíveis somente neste navegador e perfil.',true);
+   $('#storage-label').textContent='Salvo neste dispositivo';
+   $('#cloud-message').textContent='Nenhum dado é enviado para a nuvem.';
  }else{
-   cloudStatus('Login necessário','Entre na sua conta para acessar seus dados.',false);
+   cloudStatus('Login necessário','Entre na conta local para acessar seus dados.',false);
    $('#storage-label').textContent='Aguardando login';
+   $('#cloud-message').textContent='Os dados ficam somente neste dispositivo.';
  }
 }
 function cloudStatus(title,msg,ready){
@@ -115,134 +132,116 @@ function parseCSV(text){var first=text.split(/\r?\n/)[0]||'',sep=(first.match(/;
 function parseOFX(text){return Array.from(text.matchAll(/<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi)).map(function(m){var get=function(tag){return (m[1].match(new RegExp('<'+tag+'>([^\\r\\n<]+)','i'))||[])[1]||''},d=get('DTPOSTED').slice(0,8),v=Number(get('TRNAMT').replace(',','.'));if(d.length!==8)return null;return {id:id(),date:d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8),type:v>=0?'income':'expense',amount:Math.abs(v),description:get('NAME')||get('MEMO')||'Movimentação OFX',category:v>=0?'Outras receitas':'Outras despesas'}}).filter(Boolean)}
 function fp(t){return t.date+'|'+Number(t.amount).toFixed(2)+'|'+t.type+'|'+String(t.description).trim().toLowerCase().replace(/\s+/g,' ')}
 async function importFile(f){if(f.size>10485760){toast('O arquivo deve ter até 10 MB.');return}var text=await f.text();pending=/\.ofx$/i.test(f.name)||/<OFX>/i.test(text)?parseOFX(text):parseCSV(text);var known=new Set(state.transactions.map(fp)),dups=0;pending=pending.filter(function(t){if(known.has(fp(t))){dups++;return false}known.add(fp(t));return true});$('#import-message').classList.remove('hidden','error');$('#import-message').textContent=pending.length?pending.length+' lançamento(s) para revisar. '+(dups?dups+' duplicidade(s) provável(is) ignorada(s).':''):'Não encontrei linhas válidas. Confira o formato CSV/OFX ou use o modelo.';$('#import-message').classList.toggle('error',!pending.length);$('#import-preview').classList.toggle('hidden',!pending.length);$('#import-preview-info').textContent=pending.length+' lançamento(s) encontrados';$('#import-duplicate-note').textContent=dups?dups+' possível(is) duplicidade(s) ignorada(s).':'';$('#import-preview-rows').innerHTML=pending.slice(0,100).map(function(t){return '<tr><td>'+esc(t.description)+'</td><td>'+dateBR(t.date)+'</td><td>'+(t.type==='income'?'Receita':'Despesa')+'</td><td class="align-right">'+brl(t.amount)+'</td></tr>'}).join('')}
-function showAuth(message,isError){
- $('#app-shell').classList.add('hidden');
- $('#auth-screen').classList.remove('hidden');
- if(message) setAuthMessage(message,isError);
-}
 function setAuthMessage(message,isError){
  var el=$('#auth-message');el.textContent=message||'';el.classList.toggle('error',!!isError);
 }
-function lockApp(message){
- activationSeq++;session=null;state=blank();
+function normalizeEmail(email){return String(email||'').trim().toLowerCase()}
+function getDeviceAccounts(){
+ try{return JSON.parse(localStorage.getItem(ACCOUNT_KEY)||'{}')}catch(e){return {}}
+}
+function toBase64(buffer){
+ var bytes=new Uint8Array(buffer),binary='';
+ for(var i=0;i<bytes.length;i++)binary+=String.fromCharCode(bytes[i]);
+ return btoa(binary);
+}
+function fromBase64(value){
+ var binary=atob(value),bytes=new Uint8Array(binary.length);
+ for(var i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+ return bytes;
+}
+async function deriveLocalKey(password,saltB64){
+ var material=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveKey']);
+ return crypto.subtle.deriveKey({name:'PBKDF2',salt:fromBase64(saltB64),iterations:250000,hash:'SHA-256'},material,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+async function encryptData(email,key,salt,plainText){
+ var iv=crypto.getRandomValues(new Uint8Array(12));
+ var encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv:iv,additionalData:new TextEncoder().encode(email)},key,new TextEncoder().encode(plainText));
+ return {salt:salt,iv:toBase64(iv),ciphertext:toBase64(encrypted)};
+}
+async function decryptData(email,key,record){
+ var plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:fromBase64(record.iv),additionalData:new TextEncoder().encode(email)},key,fromBase64(record.ciphertext));
+ return new TextDecoder().decode(plain);
+}
+function showAuth(message,isError){
  $('#app-shell').classList.add('hidden');$('#auth-screen').classList.remove('hidden');
- $('#account-email').textContent='';$('#settings-account-email').textContent='—';
- if(message)setAuthMessage(message,false);
- renderSettings();
+ if(message)setAuthMessage(message,isError);
 }
-async function activateSession(s){
- if(!s||!s.user||!s.user.id)return;
- if(session&&session.user.id===s.user.id&&!$('#app-shell').classList.contains('hidden'))return;
- var seq=++activationSeq;session=s;showAuth('Carregando os dados da sua conta…',false);
- try{
-   var q=await sb.from('finance_data').select('payload').eq('user_id',s.user.id).maybeSingle();
-   if(seq!==activationSeq)return;
-   if(q.error)throw q.error;
-   if(q.data&&q.data.payload){state=Object.assign(blank(),q.data.payload)}
-   else{
-     state=blank();
-     var inserted=await sb.from('finance_data').upsert({user_id:s.user.id,payload:state,updated_at:new Date().toISOString()},{onConflict:'user_id'});
-     if(inserted.error)throw inserted.error;
-   }
-   try{localStorage.setItem(USER_PREFIX+s.user.id,JSON.stringify(state))}catch(e){}
-   $('#auth-screen').classList.add('hidden');$('#app-shell').classList.remove('hidden');
-   authMode='login';$('#auth-title').textContent='Bem-vindo de volta';$('#auth-intro').textContent='Entre na sua conta para acessar seus dados financeiros com segurança.';$('#auth-login').textContent='Entrar';$('#auth-signup').classList.remove('hidden');$('#auth-forgot').classList.remove('hidden');setAuthMessage('');
-   renderAll();renderSettings();$('#cloud-message').textContent='Dados carregados e vinculados à sua conta.';
- }catch(e){
-   setAuthMessage('Não foi possível carregar seus dados: '+(e.message||'erro de conexão'),true);
-   await sb.auth.signOut();
- }
-}
-async function setupCloud(){
- var c=cloudConfig();
- if(!c.url||!c.anonKey||!window.supabase){
-   localOnlyMode=true;
-   session={user:{id:'local',email:'Modo local'}};
-   state=loadState();
-   $('#auth-screen').classList.add('hidden');
-   $('#app-shell').classList.remove('hidden');
-   $('#local-mode-banner').classList.remove('hidden');
-   renderAll();
-   renderSettings();
-   return;
- }
- localOnlyMode=false;
- $('#local-mode-banner').classList.add('hidden');
- $('#auth-config-warning').classList.add('hidden');$('#auth-form').classList.remove('hidden');
- $('#auth-signup').disabled=false;$('#auth-forgot').disabled=false;
- try{
-   sb=window.supabase.createClient(c.url,c.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
-   var sub=sb.auth.onAuthStateChange(function(event,s){
-     if(event==='INITIAL_SESSION'){if(s)setTimeout(function(){activateSession(s)},0);else lockApp('')}
-     else if(event==='SIGNED_IN'&&s){setTimeout(function(){activateSession(s)},0)}
-     else if(event==='SIGNED_OUT'){lockApp('Você saiu da sua conta.')}
-     else if(event==='PASSWORD_RECOVERY'&&s){session=s;authMode='recovery';$('#auth-title').textContent='Redefinir sua senha';$('#auth-intro').textContent='Escolha uma nova senha para sua conta.';$('#auth-login').textContent='Atualizar senha';$('#auth-signup').classList.add('hidden');$('#auth-forgot').classList.add('hidden');showAuth('Digite sua nova senha abaixo.',false)}
-     else if(event==='TOKEN_REFRESHED'&&s){session=s}
-   });
-   authSubscription=sub.data.subscription;
- }catch(e){sb=null;setAuthMessage('Não foi possível iniciar o login. Confira a configuração Supabase.',true)}
+function enterApp(email,key,data){
+ activeEmail=email;cryptoKey=key;session={user:{id:email,email:email}};
+ state=Object.assign(blank(),data||{});
+ $('#auth-screen').classList.add('hidden');$('#app-shell').classList.remove('hidden');
+ renderAll();renderSettings();
+ setAuthMessage('');
 }
 async function login(e){
  if(e)e.preventDefault();
- if(!sb){setAuthMessage('O login ainda não está configurado.',true);return}
- var email=$('#auth-email').value.trim(),password=$('#auth-password').value;
- if(!email||password.length<8){setAuthMessage('Informe seu e-mail e uma senha com pelo menos 8 caracteres.',true);return}
- $('#auth-login').disabled=true;$('#auth-login').textContent=authMode==='recovery'?'Atualizando…':'Entrando…';setAuthMessage(authMode==='recovery'?'Atualizando sua senha…':'Validando seu acesso…',false);
+ if(!window.crypto||!crypto.subtle){setAuthMessage('Este navegador não oferece criptografia segura. Abra o aplicativo em HTTPS em um navegador atualizado.',true);return}
+ var email=normalizeEmail($('#auth-email').value),password=$('#auth-password').value;
+ if(!email||password.length<8){setAuthMessage('Informe o e-mail e a senha cadastrados neste dispositivo.',true);return}
+ $('#auth-login').disabled=true;$('#auth-login').textContent='Verificando…';setAuthMessage('Desbloqueando seus dados…',false);
  try{
-   if(authMode==='recovery'){
-     var changed=await sb.auth.updateUser({password:password});if(changed.error)throw changed.error;
-     authMode='login';$('#auth-title').textContent='Bem-vindo de volta';$('#auth-intro').textContent='Entre na sua conta para acessar seus dados financeiros com segurança.';$('#auth-signup').classList.remove('hidden');$('#auth-forgot').classList.remove('hidden');
-     var current=await sb.auth.getSession();if(current.data.session)await activateSession(current.data.session);setAuthMessage('Senha atualizada com sucesso.',false);
-   }else{
-     var r=await sb.auth.signInWithPassword({email:email,password:password});if(r.error)throw r.error;if(!r.data.session)setAuthMessage('Login realizado. Aguarde a confirmação do acesso.',false)
-   }
- }catch(e){setAuthMessage(e.message||'Não foi possível entrar. Confira seu e-mail e senha.',true)}
- finally{$('#auth-login').disabled=false;$('#auth-login').textContent=authMode==='recovery'?'Atualizar senha':'Entrar'}
+   var record=getDeviceAccounts()[email];
+   if(!record)throw new Error('Não encontramos essa conta neste dispositivo. Crie a conta aqui primeiro.');
+   var key=await deriveLocalKey(password,record.salt);
+   var plain=await decryptData(email,key,record);
+   var data=JSON.parse(plain);
+   if(!data||!Array.isArray(data.transactions))throw new Error('Os dados desta conta estão inválidos. Restaure um backup se tiver.');
+   enterApp(email,key,data);
+ }catch(err){setAuthMessage(err.message==='The operation failed'?'Senha incorreta. Tente novamente.':(err.message||'E-mail ou senha incorretos.'),true)}
+ finally{$('#auth-login').disabled=false;$('#auth-login').textContent='Entrar'}
 }
 async function createAccount(){
- if(!sb){setAuthMessage('O login ainda não está configurado.',true);return}
- var email=$('#auth-email').value.trim(),password=$('#auth-password').value;
- if(!email||password.length<8){setAuthMessage('Informe seu e-mail e crie uma senha com pelo menos 8 caracteres.',true);return}
- if(!confirm('Criar uma conta individual para '+email+'? Seus dados ficarão separados dos demais usuários.'))return;
- $('#auth-signup').disabled=true;setAuthMessage('Criando sua conta…',false);
+ if(!window.crypto||!crypto.subtle){setAuthMessage('Este navegador não oferece criptografia segura. Atualize o navegador e use HTTPS.',true);return}
+ var email=normalizeEmail($('#auth-email').value),password=$('#auth-password').value;
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){setAuthMessage('Informe um endereço de e-mail válido.',true);return}
+ if(password.length<8){setAuthMessage('Crie uma senha com pelo menos 8 caracteres.',true);return}
+ var accounts=getDeviceAccounts();
+ if(accounts[email]){setAuthMessage('Já existe uma conta com esse e-mail neste dispositivo. Entre com ela.',true);return}
+ if(!confirm('Criar uma conta local para '+email+'? Ela só existirá neste navegador e não será sincronizada com outros dispositivos.'))return;
+ $('#auth-signup').disabled=true;setAuthMessage('Criando sua conta protegida…',false);
  try{
-   var redirect=window.location.origin+window.location.pathname;
-   var r=await sb.auth.signUp({email:email,password:password,options:{emailRedirectTo:redirect}});
-   if(r.error)throw r.error;
-   if(r.data.session)setAuthMessage('Conta criada. Carregando seus dados…',false);
-   else setAuthMessage('Conta criada! Confira seu e-mail e clique no link de confirmação antes de entrar.',false);
- }catch(e){setAuthMessage(e.message||'Não foi possível criar sua conta.',true)}
+   var salt=crypto.getRandomValues(new Uint8Array(16)),saltB64=toBase64(salt),key=await deriveLocalKey(password,saltB64);
+   var legacy=loadLegacyState(),hasLegacy=legacy.transactions.length||legacy.budgets.length||legacy.goals.length||legacy.cards.length||legacy.debts.length;
+   var importLegacy=false;
+   if(hasLegacy)importLegacy=confirm('Encontramos dados antigos salvos neste navegador. Deseja importá-los para esta primeira conta?\n\nOK = importar os dados existentes.\nCancelar = começar vazio e manter os dados antigos guardados separadamente.');
+   var firstState=importLegacy?legacy:blank();
+   var encrypted=await encryptData(email,key,saltB64,JSON.stringify(firstState));
+   accounts[email]={email:email,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),salt:encrypted.salt,iv:encrypted.iv,ciphertext:encrypted.ciphertext};
+   localStorage.setItem(ACCOUNT_KEY,JSON.stringify(accounts));
+   if(hasLegacy){if(importLegacy)localStorage.removeItem(LEGACY_KEY);else{localStorage.setItem(LEGACY_PENDING,JSON.stringify(legacy));localStorage.removeItem(LEGACY_KEY)}}
+   enterApp(email,key,firstState);
+   toast('Conta criada neste dispositivo.');
+ }catch(err){setAuthMessage(err.message||'Não foi possível criar a conta local.',true)}
  finally{$('#auth-signup').disabled=false}
 }
-async function forgotPassword(){
- if(!sb){setAuthMessage('O login ainda não está configurado.',true);return}
- var email=$('#auth-email').value.trim();if(!email){setAuthMessage('Informe seu e-mail para receber o link de recuperação.',true);return}
- try{
-   var redirect=window.location.origin+window.location.pathname;
-   var r=await sb.auth.resetPasswordForEmail(email,{redirectTo:redirect});
-   if(r.error)throw r.error;
-   setAuthMessage('Se houver uma conta para esse e-mail, você receberá as instruções de recuperação.',false);
- }catch(e){setAuthMessage(e.message||'Não foi possível solicitar a recuperação.',true)}
+function forgotPassword(){
+ setAuthMessage('Como a conta é local e criptografada, a senha não pode ser redefinida. Sem a senha, os dados só poderão ser recuperados de um backup exportado anteriormente.',true);
 }
-async function syncCloud(){
- if(localOnlyMode){$('#cloud-message').textContent='Modo local: nenhuma sincronização na nuvem está configurada.';return false}
- if(!sb||!session)return false;
- try{
-   var r=await sb.from('finance_data').upsert({user_id:session.user.id,payload:state,updated_at:new Date().toISOString()},{onConflict:'user_id'});
-   if(r.error)throw r.error;
-   try{localStorage.setItem(USER_PREFIX+session.user.id,JSON.stringify(state))}catch(e){}
-   $('#cloud-message').textContent='Tudo sincronizado com sua conta.';$('#storage-label').textContent='Sincronizado na nuvem';return true;
- }catch(e){
-   $('#cloud-message').textContent='A cópia local foi mantida, mas a nuvem não confirmou o salvamento: '+(e.message||'erro de conexão');
-   toast('Atenção: não foi possível confirmar a sincronização.');return false;
- }
+async function saveToDevice(){
+ if(!session){toast('Entre na sua conta primeiro.');return}
+ save();await saveQueue;
+ toast('Dados salvos neste dispositivo.');
 }
 async function logout(){
- if(localOnlyMode)return;
- if(!sb)return;
- clearTimeout(window.mfpSaveTimer);if(session)await syncCloud();
- var r=await sb.auth.signOut();if(r.error){toast('Não foi possível sair: '+r.error.message);return}
- lockApp('Você saiu da sua conta.');
+ if(!session)return;
+ save();await saveQueue;
+ state=blank();session=null;activeEmail=null;cryptoKey=null;
+ $('#auth-password').value='';
+ renderSettings();showAuth('Você saiu da sua conta neste dispositivo.',false);
+}
+async function importLegacyData(){
+ if(!session)return;
+ var raw=localStorage.getItem(LEGACY_PENDING);if(!raw)return;
+ if(!confirm('Mesclar os dados antigos deste navegador com a conta '+activeEmail+'?'))return;
+ try{
+   var legacy=Object.assign(blank(),JSON.parse(raw));
+   state.transactions=state.transactions.concat(legacy.transactions||[]);
+   state.budgets=state.budgets.concat(legacy.budgets||[]);
+   state.goals=state.goals.concat(legacy.goals||[]);
+   state.cards=state.cards.concat(legacy.cards||[]);
+   state.debts=state.debts.concat(legacy.debts||[]);
+   save();await saveQueue;localStorage.removeItem(LEGACY_PENDING);renderAll();toast('Dados antigos importados e criptografados.');
+ }catch(e){toast('Não foi possível importar os dados antigos.')}
 }
 function wire(){
  $$('.nav-link[data-page]').forEach(function(b){b.addEventListener('click',function(){gotoPage(b.dataset.page)})});$$('[data-goto]').forEach(function(b){b.addEventListener('click',function(){gotoPage(b.dataset.goto)})});
@@ -261,8 +260,9 @@ function wire(){
  $('#auth-forgot').addEventListener('click',forgotPassword);
  $('#logout-button').addEventListener('click',logout);
  $('#settings-logout').addEventListener('click',logout);
- $('#cloud-sync').addEventListener('click',async function(){if(!session){toast('Entre na sua conta para sincronizar.');return}var ok=await syncCloud();if(ok)toast('Sincronização concluída.')})
+ $('#cloud-sync').addEventListener('click',saveToDevice);
+ $('#import-legacy').addEventListener('click',importLegacyData)
 }
-function init(){wire();options('expense');$('#app-shell').classList.add('hidden');$('#auth-screen').classList.remove('hidden');renderSettings();setupCloud()}
+function init(){wire();options('expense');state=blank();$('#app-shell').classList.add('hidden');$('#auth-screen').classList.remove('hidden');renderSettings();setAuthMessage('Crie uma conta neste dispositivo ou entre com uma conta já cadastrada aqui.',false)}
 init();
 })();
