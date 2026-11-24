@@ -28,6 +28,7 @@ function save(){
  }).catch(function(e){
    $('#cloud-message').textContent='Falha ao salvar neste dispositivo: '+(e.message||'erro de armazenamento');
    toast('Não foi possível salvar. Exporte um backup.');
+   throw e;
  });
  return true;
 }
@@ -219,12 +220,13 @@ function forgotPassword(){
 }
 async function saveToDevice(){
  if(!session){toast('Entre na sua conta primeiro.');return}
- save();await saveQueue;
- toast('Dados salvos neste dispositivo.');
+ save();
+ try{await saveQueue;toast('Dados salvos neste dispositivo.')}catch(e){toast('Falha ao salvar. Exporte um backup e tente novamente.')}
 }
 async function logout(){
  if(!session)return;
- save();await saveQueue;
+ save();
+ try{await saveQueue}catch(e){toast('Não saí da conta porque o último salvamento falhou. Exporte um backup e tente novamente.');return}
  state=blank();session=null;activeEmail=null;cryptoKey=null;
  $('#auth-password').value='';
  renderSettings();showAuth('Você saiu da sua conta neste dispositivo.',false);
