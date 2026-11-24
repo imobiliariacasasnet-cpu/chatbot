@@ -1,10 +1,10 @@
 (function(){
 'use strict';
-var KEY='mfp_local_v1',CLOUD='mfp_cloud_v1',state=loadState(),sb=null,session=null,pending=[],timer=null;
+var USER_PREFIX='mfp_user_',state=blank(),sb=null,session=null,pending=[],timer=null,activationSeq=0,authSubscription=null;
 var $=function(s){return document.querySelector(s)},$$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s))};
 var cats={income:['Salário','Comissões','Freelance','Investimentos','Aluguel recebido','Reembolso','Outras receitas'],expense:['Moradia','Alimentação','Transporte','Contas','Saúde','Educação','Lazer','Compras','Assinaturas','Impostos','Dívidas','Cartão de crédito','Outras despesas']};
 function blank(){return {transactions:[],budgets:[],goals:[],cards:[],debts:[]}}
-function loadState(){try{return Object.assign(blank(),JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){return blank()}}
+function loadState(){return blank()}
 function id(){return crypto&&crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2)}
 function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function brl(n){return Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
@@ -14,7 +14,7 @@ function month(v){return String(v||'').slice(0,7)}
 function dateBR(v){if(!v)return '—';var a=String(v).slice(0,10).split('-');return a.length===3?a[2]+'/'+a[1]+'/'+a[0]:v}
 function total(arr,type){return arr.filter(function(x){return !type||x.type===type}).reduce(function(a,x){return a+Number(x.amount||0)},0)}
 function toast(s){var e=$('#toast');e.textContent=s;e.classList.add('show');clearTimeout(timer);timer=setTimeout(function(){e.classList.remove('show')},3200)}
-function save(sync){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){toast('Não foi possível salvar. Exporte um backup.')}if(sync!==false&&sb&&session){clearTimeout(window.mfpSaveTimer);window.mfpSaveTimer=setTimeout(syncCloud,650)}}
+function save(sync){if(!session||!sb){toast('Entre na sua conta para salvar seus dados.');return false}try{localStorage.setItem(USER_PREFIX+session.user.id,JSON.stringify(state))}catch(e){toast('Não foi possível salvar a cópia local.')}if(sync!==false){clearTimeout(window.mfpSaveTimer);$('#cloud-message').textContent='Salvando suas alterações na nuvem…';window.mfpSaveTimer=setTimeout(syncCloud,500)}return true}
 function gotoPage(p){$$('.page').forEach(function(e){e.classList.toggle('active',e.id==='page-'+p)});$$('.nav-link[data-page]').forEach(function(e){e.classList.toggle('active',e.dataset.page===p)});var names={dashboard:'Visão geral',transactions:'Lançamentos',budgets:'Orçamentos',goals:'Metas financeiras',cards:'Cartões e dívidas',import:'Importar extrato',settings:'Configurações'};$('#crumb-label').textContent=names[p]||p;$('#sidebar').classList.remove('open');renderAll()}
 function forMonth(m){return state.transactions.filter(function(t){return month(t.date)===m})}
 function sym(c){return ({'Moradia':'⌂','Alimentação':'◉','Transporte':'↗','Contas':'ϟ','Saúde':'✚','Educação':'▤','Lazer':'✦','Compras':'◈','Salário':'⇧','Comissões':'✧','Investimentos':'↗','Dívidas':'−'})[c]||'•'}
@@ -57,13 +57,24 @@ function renderCards(){
  $('#debts-list').innerHTML=state.debts.map(function(d){return '<div class="setting-row"><div><b>'+esc(d.name)+'</b><p>'+esc(d.notes||'Dívida registrada')+'</p></div><div><b>'+brl(d.remaining)+'</b><div class="card-actions"><button class="link-btn" data-pay-debt="'+esc(d.id)+'">Pagar</button><button class="link-btn" data-delete-debt="'+esc(d.id)+'">Excluir</button></div></div></div>'}).join('');
  $('#debts-empty').classList.toggle('hidden',state.debts.length>0)
 }
-function cloudConfig(){try{return JSON.parse(localStorage.getItem(CLOUD)||'{}')}catch(e){return {}}}
-function renderSettings(){var c=cloudConfig();if(document.activeElement!==$('#supabase-url'))$('#supabase-url').value=c.url||'';if(document.activeElement!==$('#supabase-key'))$('#supabase-key').value=c.key||'';
- if(session){cloudStatus('Conectado à nuvem',session.user.email||'Conta conectada',true);$('#cloud-logout').classList.remove('hidden');$('#storage-label').textContent='Sincronização ativada'}
- else if(sb){cloudStatus('Nuvem configurada','Entre na sua conta para sincronizar.');$('#cloud-logout').classList.add('hidden')}
- else{cloudStatus('Modo local ativo','Seus dados ficam neste navegador. Configure o Supabase para sincronizar.');$('#cloud-logout').classList.add('hidden');$('#storage-label').textContent='Salvo neste dispositivo'}
+function cloudConfig(){return window.MFP_SUPABASE_CONFIG||{}}
+function renderSettings(){
+ var email=session&&session.user?session.user.email:'—';
+ $('#settings-account-email').textContent=email;
+ $('#account-email').textContent=email;
+ if(session){
+   cloudStatus('Conta conectada','Seus dados estão vinculados exclusivamente a esta conta.',true);
+   $('#storage-label').textContent='Conta sincronizada na nuvem';
+ }else{
+   cloudStatus('Login necessário','Entre na sua conta para acessar seus dados.',false);
+   $('#storage-label').textContent='Aguardando login';
+ }
 }
-function cloudStatus(title,msg,ready){$('#cloud-status-title').textContent=title;$('#cloud-status-text').textContent=msg;$('#cloud-status').classList.toggle('ready',!!ready)}
+function cloudStatus(title,msg,ready){
+ $('#cloud-status-title').textContent=title;
+ $('#cloud-status-text').textContent=msg;
+ $('#cloud-status').classList.toggle('ready',!!ready);
+}
 var fields='<label class="field-label">Tipo<select id="form-type"><option value="expense">Despesa</option><option value="income">Receita</option></select></label><label class="field-label">Valor (R$)<input id="form-amount" type="number" min=".01" step=".01" required></label><label class="field-label wide">Descrição<input id="form-description" required maxlength="140"></label><label class="field-label">Categoria<select id="form-category"></select></label><label class="field-label">Data<input id="form-date" type="date" required></label>';
 var kind='transaction', target=null;
 function options(type,selected){$('#form-category').innerHTML=cats[type].map(function(c){return '<option value="'+esc(c)+'">'+esc(c)+'</option>'}).join('');if(selected)$('#form-category').value=selected}
@@ -100,10 +111,117 @@ function parseCSV(text){var first=text.split(/\r?\n/)[0]||'',sep=(first.match(/;
 function parseOFX(text){return Array.from(text.matchAll(/<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi)).map(function(m){var get=function(tag){return (m[1].match(new RegExp('<'+tag+'>([^\\r\\n<]+)','i'))||[])[1]||''},d=get('DTPOSTED').slice(0,8),v=Number(get('TRNAMT').replace(',','.'));if(d.length!==8)return null;return {id:id(),date:d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8),type:v>=0?'income':'expense',amount:Math.abs(v),description:get('NAME')||get('MEMO')||'Movimentação OFX',category:v>=0?'Outras receitas':'Outras despesas'}}).filter(Boolean)}
 function fp(t){return t.date+'|'+Number(t.amount).toFixed(2)+'|'+t.type+'|'+String(t.description).trim().toLowerCase().replace(/\s+/g,' ')}
 async function importFile(f){if(f.size>10485760){toast('O arquivo deve ter até 10 MB.');return}var text=await f.text();pending=/\.ofx$/i.test(f.name)||/<OFX>/i.test(text)?parseOFX(text):parseCSV(text);var known=new Set(state.transactions.map(fp)),dups=0;pending=pending.filter(function(t){if(known.has(fp(t))){dups++;return false}known.add(fp(t));return true});$('#import-message').classList.remove('hidden','error');$('#import-message').textContent=pending.length?pending.length+' lançamento(s) para revisar. '+(dups?dups+' duplicidade(s) provável(is) ignorada(s).':''):'Não encontrei linhas válidas. Confira o formato CSV/OFX ou use o modelo.';$('#import-message').classList.toggle('error',!pending.length);$('#import-preview').classList.toggle('hidden',!pending.length);$('#import-preview-info').textContent=pending.length+' lançamento(s) encontrados';$('#import-duplicate-note').textContent=dups?dups+' possível(is) duplicidade(s) ignorada(s).':'';$('#import-preview-rows').innerHTML=pending.slice(0,100).map(function(t){return '<tr><td>'+esc(t.description)+'</td><td>'+dateBR(t.date)+'</td><td>'+(t.type==='income'?'Receita':'Despesa')+'</td><td class="align-right">'+brl(t.amount)+'</td></tr>'}).join('')}
-async function setupCloud(){var c=cloudConfig();if(!c.url||!c.key||!window.supabase)return;try{sb=window.supabase.createClient(c.url,c.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});var r=await sb.auth.getSession();if(r.data.session)await onSession(r.data.session);sb.auth.onAuthStateChange(function(event,s){if(event==='SIGNED_OUT'){session=null;renderSettings()}else if(event==='SIGNED_IN'&&s)setTimeout(function(){onSession(s)},0)});renderSettings()}catch(e){sb=null;$('#cloud-message').textContent='Falha na conexão: '+e.message}}
-async function onSession(s){session=s;renderSettings();$('#cloud-message').textContent='Carregando dados…';try{var q=await sb.from('finance_data').select('payload').eq('user_id',s.user.id).maybeSingle();if(q.error)throw q.error;if(q.data&&q.data.payload){state=Object.assign(blank(),q.data.payload);localStorage.setItem(KEY,JSON.stringify(state));renderAll();$('#cloud-message').textContent='Dados carregados da nuvem.'}else{if(confirm('Esta conta está vazia. Enviar os dados deste navegador para a nuvem?'))await syncCloud();else $('#cloud-message').textContent='Conta conectada; dados locais preservados.'}}catch(e){$('#cloud-message').textContent='Falha ao sincronizar: '+e.message}renderSettings()}
-async function syncCloud(){if(!sb||!session)return;try{var r=await sb.from('finance_data').upsert({user_id:session.user.id,payload:state,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(r.error)throw r.error;$('#cloud-message').textContent='Sincronização concluída.';$('#storage-label').textContent='Sincronizado na nuvem'}catch(e){$('#cloud-message').textContent='Salvo localmente; falha na nuvem: '+e.message}}
-async function auth(which){if(!sb){toast('Configure o Supabase e salve primeiro.');return}var email=$('#auth-email').value.trim(),password=$('#auth-password').value;if(!email||password.length<8){$('#cloud-message').textContent='Informe e-mail e senha com pelo menos 8 caracteres.';return}try{var r=which==='signup'?await sb.auth.signUp({email:email,password:password}):await sb.auth.signInWithPassword({email:email,password:password});if(r.error)throw r.error;if(which==='signup'&&!r.data.session){$('#cloud-message').textContent='Conta criada. Confirme o e-mail e depois entre.';return}if(r.data.session)await onSession(r.data.session)}catch(e){$('#cloud-message').textContent=e.message||'Falha na autenticação.'}}
+function showAuth(message,isError){
+ $('#app-shell').classList.add('hidden');
+ $('#auth-screen').classList.remove('hidden');
+ if(message) setAuthMessage(message,isError);
+}
+function setAuthMessage(message,isError){
+ var el=$('#auth-message');el.textContent=message||'';el.classList.toggle('error',!!isError);
+}
+function lockApp(message){
+ activationSeq++;session=null;state=blank();
+ $('#app-shell').classList.add('hidden');$('#auth-screen').classList.remove('hidden');
+ $('#account-email').textContent='';$('#settings-account-email').textContent='—';
+ if(message)setAuthMessage(message,false);
+ renderSettings();
+}
+async function activateSession(s){
+ if(!s||!s.user||!s.user.id)return;
+ if(session&&session.user.id===s.user.id&&!$('#app-shell').classList.contains('hidden'))return;
+ var seq=++activationSeq;session=s;showAuth('Carregando os dados da sua conta…',false);
+ try{
+   var q=await sb.from('finance_data').select('payload').eq('user_id',s.user.id).maybeSingle();
+   if(seq!==activationSeq)return;
+   if(q.error)throw q.error;
+   if(q.data&&q.data.payload){state=Object.assign(blank(),q.data.payload)}
+   else{
+     state=blank();
+     var inserted=await sb.from('finance_data').upsert({user_id:s.user.id,payload:state,updated_at:new Date().toISOString()},{onConflict:'user_id'});
+     if(inserted.error)throw inserted.error;
+   }
+   try{localStorage.setItem(USER_PREFIX+s.user.id,JSON.stringify(state))}catch(e){}
+   $('#auth-screen').classList.add('hidden');$('#app-shell').classList.remove('hidden');
+   $('#auth-title').textContent='Bem-vindo de volta';setAuthMessage('');
+   renderAll();renderSettings();$('#cloud-message').textContent='Dados carregados e vinculados à sua conta.';
+ }catch(e){
+   setAuthMessage('Não foi possível carregar seus dados: '+(e.message||'erro de conexão'),true);
+   await sb.auth.signOut();
+ }
+}
+async function setupCloud(){
+ var c=cloudConfig();
+ if(!c.url||!c.anonKey||!window.supabase){
+   $('#auth-config-warning').classList.remove('hidden');$('#auth-form').classList.add('hidden');
+   $('#auth-signup').disabled=true;$('#auth-forgot').disabled=true;
+   showAuth('O login ainda não foi ativado pelo administrador deste aplicativo.',true);return;
+ }
+ $('#auth-config-warning').classList.add('hidden');$('#auth-form').classList.remove('hidden');
+ $('#auth-signup').disabled=false;$('#auth-forgot').disabled=false;
+ try{
+   sb=window.supabase.createClient(c.url,c.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+   var sub=sb.auth.onAuthStateChange(function(event,s){
+     if(event==='INITIAL_SESSION'){if(s)setTimeout(function(){activateSession(s)},0);else lockApp('')}
+     else if(event==='SIGNED_IN'&&s){setTimeout(function(){activateSession(s)},0)}
+     else if(event==='SIGNED_OUT'){lockApp('Você saiu da sua conta.')}
+     else if(event==='TOKEN_REFRESHED'&&s){session=s}
+   });
+   authSubscription=sub.data.subscription;
+ }catch(e){sb=null;setAuthMessage('Não foi possível iniciar o login. Confira a configuração Supabase.',true)}
+}
+async function login(e){
+ if(e)e.preventDefault();
+ if(!sb){setAuthMessage('O login ainda não está configurado.',true);return}
+ var email=$('#auth-email').value.trim(),password=$('#auth-password').value;
+ if(!email||password.length<8){setAuthMessage('Informe seu e-mail e uma senha com pelo menos 8 caracteres.',true);return}
+ $('#auth-login').disabled=true;$('#auth-login').textContent='Entrando…';setAuthMessage('Validando seu acesso…',false);
+ try{var r=await sb.auth.signInWithPassword({email:email,password:password});if(r.error)throw r.error;if(!r.data.session)setAuthMessage('Login realizado. Aguarde a confirmação do acesso.',false)}
+ catch(e){setAuthMessage(e.message||'Não foi possível entrar. Confira seu e-mail e senha.',true)}
+ finally{$('#auth-login').disabled=false;$('#auth-login').textContent='Entrar'}
+}
+async function createAccount(){
+ if(!sb){setAuthMessage('O login ainda não está configurado.',true);return}
+ var email=$('#auth-email').value.trim(),password=$('#auth-password').value;
+ if(!email||password.length<8){setAuthMessage('Informe seu e-mail e crie uma senha com pelo menos 8 caracteres.',true);return}
+ if(!confirm('Criar uma conta individual para '+email+'? Seus dados ficarão separados dos demais usuários.'))return;
+ $('#auth-signup').disabled=true;setAuthMessage('Criando sua conta…',false);
+ try{
+   var redirect=window.location.origin+window.location.pathname;
+   var r=await sb.auth.signUp({email:email,password:password,options:{emailRedirectTo:redirect}});
+   if(r.error)throw r.error;
+   if(r.data.session)setAuthMessage('Conta criada. Carregando seus dados…',false);
+   else setAuthMessage('Conta criada! Confira seu e-mail e clique no link de confirmação antes de entrar.',false);
+ }catch(e){setAuthMessage(e.message||'Não foi possível criar sua conta.',true)}
+ finally{$('#auth-signup').disabled=false}
+}
+async function forgotPassword(){
+ if(!sb){setAuthMessage('O login ainda não está configurado.',true);return}
+ var email=$('#auth-email').value.trim();if(!email){setAuthMessage('Informe seu e-mail para receber o link de recuperação.',true);return}
+ try{
+   var redirect=window.location.origin+window.location.pathname;
+   var r=await sb.auth.resetPasswordForEmail(email,{redirectTo:redirect});
+   if(r.error)throw r.error;
+   setAuthMessage('Se houver uma conta para esse e-mail, você receberá as instruções de recuperação.',false);
+ }catch(e){setAuthMessage(e.message||'Não foi possível solicitar a recuperação.',true)}
+}
+async function syncCloud(){
+ if(!sb||!session)return false;
+ try{
+   var r=await sb.from('finance_data').upsert({user_id:session.user.id,payload:state,updated_at:new Date().toISOString()},{onConflict:'user_id'});
+   if(r.error)throw r.error;
+   try{localStorage.setItem(USER_PREFIX+session.user.id,JSON.stringify(state))}catch(e){}
+   $('#cloud-message').textContent='Tudo sincronizado com sua conta.';$('#storage-label').textContent='Sincronizado na nuvem';return true;
+ }catch(e){
+   $('#cloud-message').textContent='A cópia local foi mantida, mas a nuvem não confirmou o salvamento: '+(e.message||'erro de conexão');
+   toast('Atenção: não foi possível confirmar a sincronização.');return false;
+ }
+}
+async function logout(){
+ if(!sb)return;
+ clearTimeout(window.mfpSaveTimer);if(session)await syncCloud();
+ var r=await sb.auth.signOut();if(r.error){toast('Não foi possível sair: '+r.error.message);return}
+ lockApp('Você saiu da sua conta.');
+}
 function wire(){
  $$('.nav-link[data-page]').forEach(function(b){b.addEventListener('click',function(){gotoPage(b.dataset.page)})});$$('[data-goto]').forEach(function(b){b.addEventListener('click',function(){gotoPage(b.dataset.goto)})});
  $('#mobile-menu').addEventListener('click',function(){$('#sidebar').classList.toggle('open')});
@@ -116,9 +234,13 @@ function wire(){
  $('#backup-top').addEventListener('click',exportBackup);$('#export-backup').addEventListener('click',exportBackup);$('#restore-file').addEventListener('change',function(e){if(e.target.files[0])restoreBackup(e.target.files[0]);e.target.value=''});
  $('#clear-data').addEventListener('click',function(){if(confirm('Apagar todos os dados deste navegador? Exporte um backup antes.')){state=blank();save();renderAll();toast('Dados locais apagados.')}});
  $('#statement-file').addEventListener('change',function(e){if(e.target.files[0])importFile(e.target.files[0]).catch(function(){toast('Não foi possível ler o arquivo.')})});$('#cancel-import').addEventListener('click',function(){pending=[];$('#import-preview').classList.add('hidden')});$('#confirm-import').addEventListener('click',function(){if(!pending.length)return;state.transactions.push.apply(state.transactions,pending);var n=pending.length;pending=[];save();$('#import-preview').classList.add('hidden');$('#statement-file').value='';$('#import-message').classList.add('hidden');renderAll();toast(n+' lançamento(s) importado(s).')});
- $('#save-cloud-config').addEventListener('click',async function(){var url=$('#supabase-url').value.trim().replace(/\/$/,''),key=$('#supabase-key').value.trim();if(url&&!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)){toast('Confira a URL do projeto Supabase.');return}localStorage.setItem(CLOUD,JSON.stringify({url:url,key:key}));sb=null;session=null;await setupCloud();toast('Configuração salva neste dispositivo.')});
- $('#cloud-login').addEventListener('click',function(){auth('login')});$('#cloud-signup').addEventListener('click',function(){auth('signup')});$('#cloud-logout').addEventListener('click',async function(){if(sb)await sb.auth.signOut();session=null;renderSettings()});$('#cloud-sync').addEventListener('click',async function(){if(!session){toast('Entre na sua conta para sincronizar.');return}await syncCloud();toast('Sincronização concluída.')})
+ $('#auth-form').addEventListener('submit',login);
+ $('#auth-signup').addEventListener('click',createAccount);
+ $('#auth-forgot').addEventListener('click',forgotPassword);
+ $('#logout-button').addEventListener('click',logout);
+ $('#settings-logout').addEventListener('click',logout);
+ $('#cloud-sync').addEventListener('click',async function(){if(!session){toast('Entre na sua conta para sincronizar.');return}var ok=await syncCloud();if(ok)toast('Sincronização concluída.')})
 }
-function init(){wire();options('expense');renderAll();if(cloudConfig().url&&cloudConfig().key)setupCloud();else renderSettings()}
+function init(){wire();options('expense');$('#app-shell').classList.add('hidden');$('#auth-screen').classList.remove('hidden');renderSettings();setupCloud()}
 init();
 })();
