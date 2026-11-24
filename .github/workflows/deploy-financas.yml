@@ -69,3 +69,27 @@ jobs:
         uses: actions/deploy-pages@v5
         with:
           artifact_name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Verificar página e arquivos publicados
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          set -e
+          base="${PAGE_URL%/}"
+          for attempt in {1..12}; do
+            code="$(curl -sSL -o /tmp/mfp-index.html -w '%{http_code}' "$PAGE_URL" || true)"
+            if [ "$code" = "200" ] && grep -q "Meu Financeiro Pessoal" /tmp/mfp-index.html; then
+              echo "Página principal respondeu HTTP 200."
+              break
+            fi
+            if [ "$attempt" = "12" ]; then
+              echo "::error::A página não respondeu corretamente após 60 segundos (HTTP $code)."
+              exit 1
+            fi
+            echo "Aguardando propagação do GitHub Pages (tentativa $attempt/12; HTTP $code)."
+            sleep 5
+          done
+          for asset in styles.css app.js manifest.webmanifest service-worker.js; do
+            curl -fsS "$base/$asset" -o /dev/null
+            echo "Arquivo publicado: $asset"
+          done
