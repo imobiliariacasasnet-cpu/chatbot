@@ -1,6 +1,6 @@
 # Meu Financeiro Pessoal
 
-Aplicativo web responsivo e instalável como PWA, em português e com moeda BRL.
+Aplicativo web responsivo e instalável como PWA, em português e com moeda BRL. Se o Supabase ainda não estiver conectado, o aplicativo permanece temporariamente no modo local para não interromper o uso; depois de preencher config.js, o login individual passa a ser obrigatório.
 
 ## Recursos
 - Dashboard com receitas, despesas, saldo, taxa de economia e gráficos.
@@ -29,6 +29,7 @@ Aplicativo web responsivo e instalável como PWA, em português e com moeda BRL.
 - Cada conta possui uma linha própria em `finance_data`, identificada pelo ID do usuário autenticado.
 - O banco exige `auth.uid() = user_id` para leitura, inserção e alteração. Não há política para usuários anônimos.
 - O app grava cópias locais apenas com uma chave derivada do ID daquela conta e sempre busca o estado principal da nuvem após o login.
+- Enquanto config.js estiver vazio, os recursos continuam no modo local legado, com aviso visível. Esse modo não oferece separação de usuários nem sincronização; não o use em dispositivos compartilhados.
 - Ao sair, o estado em memória é limpo. Nenhum dado local antigo é atribuído automaticamente à primeira conta, para evitar transferir dados de outra pessoa num dispositivo compartilhado.
 - O payload completo é sincronizado como um documento JSON por usuário. Não há edição simultânea/merge em tempo real; evite editar a mesma conta em vários dispositivos ao mesmo tempo.
 
