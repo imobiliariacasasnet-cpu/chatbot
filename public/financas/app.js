@@ -1,10 +1,10 @@
 (function(){
 'use strict';
-var USER_PREFIX='mfp_user_',state=blank(),sb=null,session=null,pending=[],timer=null,activationSeq=0,authSubscription=null,authMode='login';
+var USER_PREFIX='mfp_user_',KEY='mfp_local_v1',state=blank(),sb=null,session=null,pending=[],timer=null,activationSeq=0,authSubscription=null,authMode='login',localOnlyMode=false;
 var $=function(s){return document.querySelector(s)},$$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s))};
 var cats={income:['Salário','Comissões','Freelance','Investimentos','Aluguel recebido','Reembolso','Outras receitas'],expense:['Moradia','Alimentação','Transporte','Contas','Saúde','Educação','Lazer','Compras','Assinaturas','Impostos','Dívidas','Cartão de crédito','Outras despesas']};
 function blank(){return {transactions:[],budgets:[],goals:[],cards:[],debts:[]}}
-function loadState(){return blank()}
+function loadState(){try{return Object.assign(blank(),JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){return blank()}}
 function id(){return crypto&&crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2)}
 function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function brl(n){return Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
@@ -14,7 +14,7 @@ function month(v){return String(v||'').slice(0,7)}
 function dateBR(v){if(!v)return '—';var a=String(v).slice(0,10).split('-');return a.length===3?a[2]+'/'+a[1]+'/'+a[0]:v}
 function total(arr,type){return arr.filter(function(x){return !type||x.type===type}).reduce(function(a,x){return a+Number(x.amount||0)},0)}
 function toast(s){var e=$('#toast');e.textContent=s;e.classList.add('show');clearTimeout(timer);timer=setTimeout(function(){e.classList.remove('show')},3200)}
-function save(sync){if(!session||!sb){toast('Entre na sua conta para salvar seus dados.');return false}try{localStorage.setItem(USER_PREFIX+session.user.id,JSON.stringify(state))}catch(e){toast('Não foi possível salvar a cópia local.')}if(sync!==false){clearTimeout(window.mfpSaveTimer);$('#cloud-message').textContent='Salvando suas alterações na nuvem…';window.mfpSaveTimer=setTimeout(syncCloud,500)}return true}
+function save(sync){if(localOnlyMode){try{localStorage.setItem(KEY,JSON.stringify(state));$('#cloud-message').textContent='Modo local: dados salvos somente neste navegador.'}catch(e){toast('Não foi possível salvar. Exporte um backup.')}return true}if(!session||!sb){toast('Entre na sua conta para salvar seus dados.');return false}try{localStorage.setItem(USER_PREFIX+session.user.id,JSON.stringify(state))}catch(e){toast('Não foi possível salvar a cópia local.')}if(sync!==false){clearTimeout(window.mfpSaveTimer);$('#cloud-message').textContent='Salvando suas alterações na nuvem…';window.mfpSaveTimer=setTimeout(syncCloud,500)}return true}
 function gotoPage(p){$$('.page').forEach(function(e){e.classList.toggle('active',e.id==='page-'+p)});$$('.nav-link[data-page]').forEach(function(e){e.classList.toggle('active',e.dataset.page===p)});var names={dashboard:'Visão geral',transactions:'Lançamentos',budgets:'Orçamentos',goals:'Metas financeiras',cards:'Cartões e dívidas',import:'Importar extrato',settings:'Configurações'};$('#crumb-label').textContent=names[p]||p;$('#sidebar').classList.remove('open');renderAll()}
 function forMonth(m){return state.transactions.filter(function(t){return month(t.date)===m})}
 function sym(c){return ({'Moradia':'⌂','Alimentação':'◉','Transporte':'↗','Contas':'ϟ','Saúde':'✚','Educação':'▤','Lazer':'✦','Compras':'◈','Salário':'⇧','Comissões':'✧','Investimentos':'↗','Dívidas':'−'})[c]||'•'}
@@ -59,10 +59,14 @@ function renderCards(){
 }
 function cloudConfig(){return window.MFP_SUPABASE_CONFIG||{}}
 function renderSettings(){
- var email=session&&session.user?session.user.email:'—';
+ var email=localOnlyMode?'Modo local':(session&&session.user?session.user.email:'—');
  $('#settings-account-email').textContent=email;
  $('#account-email').textContent=email;
- if(session){
+ $('#logout-button').classList.toggle('hidden',!!localOnlyMode);
+ $('#settings-logout').classList.toggle('hidden',!!localOnlyMode);
+ $('#cloud-sync').disabled=!!localOnlyMode;
+ if(localOnlyMode){cloudStatus('Modo local temporário','Login multiusuário será ativado quando o Supabase for conectado.',false);$('#storage-label').textContent='Salvo neste navegador';$('#cloud-message').textContent='Os dados ficam somente neste dispositivo. A nuvem e as contas ainda não foram configuradas.'}
+ else if(session){
    cloudStatus('Conta conectada','Seus dados estão vinculados exclusivamente a esta conta.',true);
    $('#storage-label').textContent='Conta sincronizada na nuvem';
  }else{
@@ -152,10 +156,18 @@ async function activateSession(s){
 async function setupCloud(){
  var c=cloudConfig();
  if(!c.url||!c.anonKey||!window.supabase){
-   $('#auth-config-warning').classList.remove('hidden');$('#auth-form').classList.add('hidden');
-   $('#auth-signup').disabled=true;$('#auth-forgot').disabled=true;
-   showAuth('O login ainda não foi ativado pelo administrador deste aplicativo.',true);return;
+   localOnlyMode=true;
+   session={user:{id:'local',email:'Modo local'}};
+   state=loadState();
+   $('#auth-screen').classList.add('hidden');
+   $('#app-shell').classList.remove('hidden');
+   $('#local-mode-banner').classList.remove('hidden');
+   renderAll();
+   renderSettings();
+   return;
  }
+ localOnlyMode=false;
+ $('#local-mode-banner').classList.add('hidden');
  $('#auth-config-warning').classList.add('hidden');$('#auth-form').classList.remove('hidden');
  $('#auth-signup').disabled=false;$('#auth-forgot').disabled=false;
  try{
@@ -213,6 +225,7 @@ async function forgotPassword(){
  }catch(e){setAuthMessage(e.message||'Não foi possível solicitar a recuperação.',true)}
 }
 async function syncCloud(){
+ if(localOnlyMode){$('#cloud-message').textContent='Modo local: nenhuma sincronização na nuvem está configurada.';return false}
  if(!sb||!session)return false;
  try{
    var r=await sb.from('finance_data').upsert({user_id:session.user.id,payload:state,updated_at:new Date().toISOString()},{onConflict:'user_id'});
@@ -225,6 +238,7 @@ async function syncCloud(){
  }
 }
 async function logout(){
+ if(localOnlyMode)return;
  if(!sb)return;
  clearTimeout(window.mfpSaveTimer);if(session)await syncCloud();
  var r=await sb.auth.signOut();if(r.error){toast('Não foi possível sair: '+r.error.message);return}
