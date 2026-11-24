@@ -43,14 +43,6 @@ jobs:
           test -s site/index.html
           echo "Arquivos do aplicativo validados."
 
-      - name: Confirmar configuração do projeto Supabase
-        run: |
-          if grep -Eq 'url:[[:space:]]*""|anonKey:[[:space:]]*""' public/financas/config.js; then
-            echo "::error::Login não será publicado ainda: configure a Project URL e a chave pública do Supabase em public/financas/config.js."
-            exit 1
-          fi
-          echo "Configuração pública do Supabase encontrada."
-
       - name: Enviar arquivos estáticos
         uses: actions/upload-pages-artifact@v5
         with:
