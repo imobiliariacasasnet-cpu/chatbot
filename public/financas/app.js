@@ -81,7 +81,8 @@ function renderSettings(){
  $('#logout-button').classList.toggle('hidden',!session);
  $('#settings-logout').classList.toggle('hidden',!session);
  $('#cloud-sync').disabled=!session;
- $('#legacy-import-row').classList.toggle('hidden',!localStorage.getItem(LEGACY_PENDING));
+ var pendingRecord=null;try{pendingRecord=JSON.parse(localStorage.getItem(LEGACY_PENDING)||'null')}catch(e){}
+ $('#legacy-import-row').classList.toggle('hidden',!(session&&pendingRecord&&pendingRecord.email===activeEmail));
  if(session){
    cloudStatus('Dados protegidos neste dispositivo','Criptografados e disponíveis somente neste navegador e perfil.',true);
    $('#storage-label').textContent='Salvo neste dispositivo';
@@ -207,9 +208,11 @@ async function createAccount(){
    if(hasLegacy)importLegacy=confirm('Encontramos dados antigos salvos neste navegador. Deseja importá-los para esta primeira conta?\n\nOK = importar os dados existentes.\nCancelar = começar vazio e manter os dados antigos guardados separadamente.');
    var firstState=importLegacy?legacy:blank();
    var encrypted=await encryptData(email,key,saltB64,JSON.stringify(firstState));
+   var pendingEncrypted=null;
+   if(hasLegacy&&!importLegacy)pendingEncrypted=await encryptData(email,key,saltB64,JSON.stringify(legacy));
    accounts[email]={email:email,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),salt:encrypted.salt,iv:encrypted.iv,ciphertext:encrypted.ciphertext};
    localStorage.setItem(ACCOUNT_KEY,JSON.stringify(accounts));
-   if(hasLegacy){if(importLegacy)localStorage.removeItem(LEGACY_KEY);else{localStorage.setItem(LEGACY_PENDING,JSON.stringify(legacy));localStorage.removeItem(LEGACY_KEY)}}
+   if(hasLegacy){if(importLegacy)localStorage.removeItem(LEGACY_KEY);else{localStorage.setItem(LEGACY_PENDING,JSON.stringify({email:email,salt:pendingEncrypted.salt,iv:pendingEncrypted.iv,ciphertext:pendingEncrypted.ciphertext}));localStorage.removeItem(LEGACY_KEY)}}
    enterApp(email,key,firstState);
    toast('Conta criada neste dispositivo.');
  }catch(err){setAuthMessage(err.message||'Não foi possível criar a conta local.',true)}
@@ -236,7 +239,9 @@ async function importLegacyData(){
  var raw=localStorage.getItem(LEGACY_PENDING);if(!raw)return;
  if(!confirm('Mesclar os dados antigos deste navegador com a conta '+activeEmail+'?'))return;
  try{
-   var legacy=Object.assign(blank(),JSON.parse(raw));
+   var pendingRecord=JSON.parse(raw);if(!pendingRecord||pendingRecord.email!==activeEmail)throw new Error('Backup legado pertence a outra conta.');
+   var plain=await decryptData(activeEmail,cryptoKey,pendingRecord);
+   var legacy=Object.assign(blank(),JSON.parse(plain));
    state.transactions=state.transactions.concat(legacy.transactions||[]);
    state.budgets=state.budgets.concat(legacy.budgets||[]);
    state.goals=state.goals.concat(legacy.goals||[]);
