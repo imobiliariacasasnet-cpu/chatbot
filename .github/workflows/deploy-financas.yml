@@ -19,25 +19,32 @@ concurrency:
 
 jobs:
   deploy:
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
     steps:
       - name: Baixar o repositório
-        uses: actions/checkout@v4
-      - name: Configurar GitHub Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - name: Preparar arquivos estáticos do app
+        uses: actions/checkout@v6
+
+      - name: Validar arquivos do aplicativo
         run: |
+          test -s public/financas/index.html
+          test -s public/financas/styles.css
+          test -s public/financas/app.js
+          test -s public/financas/manifest.webmanifest
+          test -s public/financas/service-worker.js
           mkdir -p site
           cp -R public/financas/. site/
-      - name: Criar artefato de publicação
-        uses: actions/upload-pages-artifact@v3
+          touch site/.nojekyll
+          test -s site/index.html
+          echo "Arquivos do aplicativo validados."
+
+      - name: Enviar arquivos estáticos
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site
-      - name: Publicar site
+
+      - name: Publicar no GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
