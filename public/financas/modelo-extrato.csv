@@ -1,0 +1,4 @@
+data,descricao,valor,tipo,categoria
+2026-11-01,Salário,5000,receita,Salário
+2026-11-03,Supermercado,250,despesa,Alimentação
+2026-11-05,Conta de internet,120,despesa,Contas
