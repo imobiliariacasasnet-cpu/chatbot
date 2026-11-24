@@ -33,6 +33,8 @@ jobs:
           test -s public/financas/index.html
           test -s public/financas/styles.css
           test -s public/financas/app.js
+          test -s public/financas/config.js
+          test -s public/financas/supabase.sql
           test -s public/financas/manifest.webmanifest
           test -s public/financas/service-worker.js
           mkdir -p site
