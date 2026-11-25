@@ -8,7 +8,7 @@
 <title>Meu Financeiro Pessoal</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="./styles.css?v=15">
+<link rel="stylesheet" href="./styles.css?v=16">
 </head>
 <body>
 <section id="auth-screen" class="auth-screen hidden">
@@ -95,5 +95,5 @@
 </main></div>
 <div class="modal-backdrop hidden" id="transaction-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal"><div class="modal-head"><div><p class="eyebrow">NOVA MOVIMENTAÇÃO</p><h2 id="modal-title">Novo lançamento</h2></div><button class="icon-btn" id="close-modal" aria-label="Fechar">×</button></div><p id="receipt-review-note" class="receipt-review-note hidden">A IA preencheu uma sugestão com base na imagem. Confira e corrija os dados antes de salvar.</p><form id="transaction-form"><div class="form-grid"><label class="field-label">Tipo<select id="form-type"><option value="expense">Despesa</option><option value="income">Receita</option></select></label><label class="field-label">Valor (R$)<input id="form-amount" type="number" min="0.01" step="0.01" required placeholder="0,00"></label><label class="field-label wide">Descrição<input id="form-description" required maxlength="140" placeholder="Ex.: supermercado"></label><label class="field-label">Categoria<select id="form-category"></select></label><label class="field-label">Data<input id="form-date" type="date" required></label></div><div class="form-actions"><button type="button" class="btn secondary" id="cancel-modal">Cancelar</button><button type="submit" id="transaction-submit" class="btn primary">Salvar lançamento</button></div></form></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="./app.js?v=15"></script><script>if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){window.addEventListener('load',function(){navigator.serviceWorker.register('./service-worker.js').catch(function(){})})}</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="./app.js?v=16"></script><script>if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){window.addEventListener('load',function(){navigator.serviceWorker.register('./service-worker.js').catch(function(){})})}</script>
 </body></html>
