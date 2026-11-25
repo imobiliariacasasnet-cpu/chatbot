@@ -117,27 +117,102 @@ function cloudStatus(title,msg,ready){
  $('#cloud-status-text').textContent=msg;
  $('#cloud-status').classList.toggle('ready',!!ready);
 }
-var fields='<label class="field-label">Tipo<select id="form-type"><option value="expense">Despesa</option><option value="income">Receita</option></select></label><label class="field-label">Valor (R$)<input id="form-amount" type="number" min=".01" step=".01" required></label><label class="field-label wide">Descrição<input id="form-description" required maxlength="140"></label><label class="field-label">Categoria<select id="form-category"></select></label><label class="field-label">Data<input id="form-date" type="date" required></label>';
-var kind='transaction', target=null;
+var fields='<label class="field-label">Tipo<select id="form-type"><option value="expense">Despesa</option><option value="income">Receita</option></select></label>'+
+'<label class="field-label"><span id="form-amount-label">Valor (R$)</span><input id="form-amount" type="number" min=".01" step=".01" required></label>'+
+'<label class="field-label wide">Descrição<input id="form-description" required maxlength="140"></label>'+
+'<label class="field-label">Categoria<select id="form-category"></select></label>'+
+'<label class="field-label">Data da primeira parcela<input id="form-date" type="date" required></label>'+
+'<label class="field-label">Conta ou origem<input id="form-account" maxlength="100" value="Conta principal"></label>'+
+'<label class="field-label">Cartão (opcional)<select id="form-card"><option value="">Não é compra de cartão</option></select></label>'+
+'<label class="field-label wide">Número de parcelas<select id="form-installments"><option value="1">À vista</option><option value="2">2 parcelas</option><option value="3">3 parcelas</option><option value="4">4 parcelas</option><option value="5">5 parcelas</option><option value="6">6 parcelas</option><option value="7">7 parcelas</option><option value="8">8 parcelas</option><option value="9">9 parcelas</option><option value="10">10 parcelas</option><option value="11">11 parcelas</option><option value="12">12 parcelas</option><option value="18">18 parcelas</option><option value="24">24 parcelas</option><option value="36">36 parcelas</option></select></label>'+
+'<label class="field-label wide">Observações<textarea id="form-notes" rows="2" maxlength="500" placeholder="Opcional"></textarea></label>';
+var kind='transaction', target=null, targetGroup=null;
 function options(type,selected){$('#form-category').innerHTML=cats[type].map(function(c){return '<option value="'+esc(c)+'">'+esc(c)+'</option>'}).join('');if(selected)$('#form-category').value=selected}
-function openForm(k,obj){kind=k;target=obj&&obj.id||null;$('#transaction-modal').classList.remove('hidden');$('#modal-title').textContent=({transaction:obj?'Editar lançamento':'Novo lançamento',budget:'Criar orçamento',goal:'Nova meta financeira',card:'Adicionar cartão',debt:'Registrar dívida',contribution:'Adicionar à meta',payment:'Registrar pagamento'})[k]||'Novo registro';var grid=$('#transaction-form .form-grid');
- if(k==='transaction'){grid.innerHTML=fields;$('#form-date').value=obj?obj.date:isoDate();$('#form-amount').value=obj?obj.amount:'';$('#form-description').value=obj?obj.description:'';$('#form-type').value=obj?obj.type:'expense';options($('#form-type').value,obj&&obj.category);$('#form-type').onchange=function(){options($('#form-type').value)}}
- else if(k==='budget')grid.innerHTML='<label class="field-label wide">Categoria<select id="x-cat">'+cats.expense.map(function(c){return '<option>'+esc(c)+'</option>'}).join('')+'</select></label><label class="field-label wide">Limite mensal (R$)<input id="x-limit" type="number" min=".01" step=".01" required></label>';
- else if(k==='goal')grid.innerHTML='<label class="field-label wide">Nome da meta<input id="x-name" required placeholder="Reserva de emergência"></label><label class="field-label">Valor desejado (R$)<input id="x-target" type="number" min=".01" step=".01" required></label><label class="field-label">Já guardado (R$)<input id="x-saved" type="number" min="0" step=".01" value="0"></label><label class="field-label wide">Data desejada<input id="x-due" type="date"></label>';
- else if(k==='card')grid.innerHTML='<label class="field-label">Nome do cartão<input id="x-name" required placeholder="Cartão principal"></label><label class="field-label">Banco/emissor<input id="x-bank"></label><label class="field-label">Limite (R$)<input id="x-limit" type="number" min="0" step=".01" required></label><label class="field-label">Limite utilizado (R$)<input id="x-used" type="number" min="0" step=".01" value="0"></label><label class="field-label">Dia fechamento<input id="x-closing" type="number" min="1" max="31"></label><label class="field-label">Dia vencimento<input id="x-due" type="number" min="1" max="31"></label>';
- else if(k==='debt')grid.innerHTML='<label class="field-label wide">Nome da dívida<input id="x-name" required></label><label class="field-label">Valor original (R$)<input id="x-total" type="number" min="0" step=".01" required></label><label class="field-label">Saldo a pagar (R$)<input id="x-rem" type="number" min="0" step=".01" required></label><label class="field-label wide">Observação<input id="x-notes"></label>';
- else grid.innerHTML='<label class="field-label wide">Valor (R$)<input id="x-value" type="number" min=".01" step=".01" required></label>'
+function populateCardOptions(selected){
+ var el=$('#form-card');if(!el)return;
+ el.innerHTML='<option value="">Não é compra de cartão</option>'+state.cards.map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>'}).join('');
+ el.value=selected||'';
 }
-function closeForm(){$('#transaction-modal').classList.add('hidden');$('#transaction-form .form-grid').innerHTML=fields;options('expense');target=null}
+function shiftMonth(date,offset){
+ var p=String(date||isoDate()).split('-').map(Number),year=p[0],monthIndex=p[1]-1+offset,day=p[2]||1;
+ var y=year+Math.floor(monthIndex/12),m=((monthIndex%12)+12)%12,last=new Date(y,m+1,0).getDate();
+ return String(y)+'-'+String(m+1).padStart(2,'0')+'-'+String(Math.min(day,last)).padStart(2,'0');
+}
+function makeInstallmentTransactions(base,totalAmount,count,groupId){
+ var cents=Math.round(Number(totalAmount)*100),n=Math.max(1,Math.min(36,Number(count)||1)),each=Math.floor(cents/n),remainder=cents-(each*n),out=[];
+ for(var i=0;i<n;i++){
+  var rec=Object.assign({},base,{id:id(),amount:(each+(i<remainder?1:0))/100,date:shiftMonth(base.date,i),createdAt:Date.now()});
+  rec.installmentGroup=n>1?groupId:'';rec.installmentNo=n>1?i+1:0;rec.installments=n;out.push(rec);
+ }
+ return out;
+}
+function updateTransactionFields(){
+ var income=$('#form-type')&&$('#form-type').value==='income';
+ if($('#form-card')){if(income)$('#form-card').value='';$('#form-card').disabled=income}
+ if($('#form-installments')){if(income)$('#form-installments').value='1';$('#form-installments').disabled=income}
+ if($('#form-amount-label'))$('#form-amount-label').textContent=Number($('#form-installments').value||1)>1?'Valor total da compra (R$)':'Valor da movimentação (R$)';
+}
+function openForm(k,obj){
+ kind=k;target=obj&&obj.id||null;targetGroup=null;
+ $('#transaction-modal').classList.remove('hidden');
+ $('#modal-title').textContent=({transaction:obj?'Editar lançamento':'Novo lançamento',budget:obj?'Editar orçamento':'Criar orçamento',goal:obj?'Editar meta financeira':'Nova meta financeira',card:obj?'Editar cartão':'Adicionar cartão',debt:obj?'Editar dívida':'Registrar dívida',contribution:'Adicionar à meta',payment:'Registrar pagamento'})[k]||'Novo registro';
+ var grid=$('#transaction-form .form-grid');
+ if(k==='transaction'){
+  var rows=obj&&obj.installmentGroup?state.transactions.filter(function(t){return t.installmentGroup===obj.installmentGroup}).sort(function(a,b){return Number(a.installmentNo||0)-Number(b.installmentNo||0)}):[];
+  var lead=rows.length?rows[0]:(obj||null);targetGroup=rows.length?obj.installmentGroup:null;
+  grid.innerHTML=fields;$('#form-date').value=lead?lead.date:isoDate();
+  $('#form-amount').value=rows.length?rows.reduce(function(a,t){return a+Number(t.amount||0)},0):(lead?lead.amount:'');
+  $('#form-description').value=lead?lead.description:'';$('#form-type').value=lead?lead.type:'expense';
+  options($('#form-type').value,lead&&lead.category);populateCardOptions(lead&&lead.cardId);
+  $('#form-account').value=lead&&lead.account||'Conta principal';$('#form-notes').value=lead&&lead.notes||'';
+  $('#form-installments').value=rows.length?rows.length:(lead&&lead.installments||1);
+  $('#form-type').onchange=function(){options($('#form-type').value);updateTransactionFields()};
+  $('#form-installments').onchange=updateTransactionFields;updateTransactionFields();
+ }else if(k==='budget'){
+  grid.innerHTML='<label class="field-label wide">Categoria<select id="x-cat">'+cats.expense.map(function(c){return '<option value="'+esc(c)+'">'+esc(c)+'</option>'}).join('')+'</select></label><label class="field-label wide">Mês<input id="x-month" type="month" value="'+esc(obj&&obj.month||$('#budget-month-picker').value||thisMonth())+'" required></label><label class="field-label wide">Limite mensal (R$)<input id="x-limit" type="number" min=".01" step=".01" value="'+esc(obj?obj.limit:'')+'" required></label>';
+  if(obj)$('#x-cat').value=obj.category;
+ }else if(k==='goal'){
+  grid.innerHTML='<label class="field-label wide">Nome da meta<input id="x-name" required placeholder="Reserva de emergência" value="'+esc(obj?obj.name:'')+'"></label><label class="field-label">Valor desejado (R$)<input id="x-target" type="number" min=".01" step=".01" value="'+esc(obj?obj.target:'')+'" required></label><label class="field-label">Já guardado (R$)<input id="x-saved" type="number" min="0" step=".01" value="'+esc(obj?obj.saved:0)+'"></label><label class="field-label wide">Data desejada<input id="x-due" type="date" value="'+esc(obj?obj.due:'')+'"></label>';
+ }else if(k==='card'){
+  grid.innerHTML='<label class="field-label">Nome do cartão<input id="x-name" required placeholder="Cartão principal" value="'+esc(obj?obj.name:'')+'"></label><label class="field-label">Banco/emissor<input id="x-bank" value="'+esc(obj?obj.bank:'')+'"></label><label class="field-label">Limite (R$)<input id="x-limit" type="number" min="0" step=".01" value="'+esc(obj?obj.limit:'')+'" required></label><label class="field-label">Utilização inicial já existente (R$)<input id="x-used" type="number" min="0" step=".01" value="'+esc(obj?(obj.startingUsed!=null?obj.startingUsed:obj.used):0)+'"></label><label class="field-label">Dia de fechamento<input id="x-closing" type="number" min="1" max="31" value="'+esc(obj?obj.closing:'')+'"></label><label class="field-label">Dia de vencimento<input id="x-due" type="number" min="1" max="31" value="'+esc(obj?obj.due:'')+'"></label>';
+ }else if(k==='debt'){
+  grid.innerHTML='<label class="field-label wide">Nome da dívida<input id="x-name" required value="'+esc(obj?obj.name:'')+'"></label><label class="field-label">Valor original (R$)<input id="x-total" type="number" min="0" step=".01" value="'+esc(obj?obj.total:'')+'" required></label><label class="field-label">Valor já pago (R$)<input id="x-paid" type="number" min="0" step=".01" value="'+esc(obj?obj.paid||0:0)+'" required></label><label class="field-label">Valor da parcela (opcional)<input id="x-installment" type="number" min="0" step=".01" value="'+esc(obj?obj.installment||0:0)+'"></label><label class="field-label">Próximo vencimento<input id="x-due" type="date" value="'+esc(obj?obj.dueDate:'')+'"></label><label class="field-label wide">Observação<input id="x-notes" value="'+esc(obj?obj.notes:'')+'"></label>';
+ }else grid.innerHTML='<label class="field-label wide">Valor (R$)<input id="x-value" type="number" min=".01" step=".01" required></label>';
+}
+function closeForm(){
+ $('#transaction-modal').classList.add('hidden');$('#transaction-form .form-grid').innerHTML=fields;options('expense');populateCardOptions('');target=null;targetGroup=null;
+}
 function num(s){return Number($('#'+s).value||0)}function txt(s){return ($('#'+s).value||'').trim()}
 function submitForm(e){e.preventDefault();
- if(kind==='transaction'){var t={id:target||id(),type:$('#form-type').value,amount:num('form-amount'),description:txt('form-description'),category:$('#form-category').value,date:$('#form-date').value};if(!t.description||!t.date||t.amount<=0){toast('Confira descrição, data e valor.');return}if(target)state.transactions=state.transactions.map(function(x){return x.id===target?t:x});else state.transactions.push(t)}
- if(kind==='budget'){var cat=txt('x-cat'),lim=num('x-limit');if(lim<=0)return;var ex=state.budgets.find(function(b){return b.category===cat});if(ex)ex.limit=lim;else state.budgets.push({id:id(),category:cat,limit:lim})}
- if(kind==='goal'){var name=txt('x-name'),tar=num('x-target');if(!name||tar<=0)return;state.goals.push({id:id(),name:name,target:tar,saved:num('x-saved'),due:txt('x-due')})}
- if(kind==='card'){var cn=txt('x-name');if(!cn)return;state.cards.push({id:id(),name:cn,bank:txt('x-bank'),limit:num('x-limit'),used:num('x-used'),closing:txt('x-closing'),due:txt('x-due')})}
- if(kind==='debt'){var dn=txt('x-name');if(!dn)return;state.debts.push({id:id(),name:dn,total:num('x-total'),remaining:num('x-rem'),notes:txt('x-notes')})}
- if(kind==='contribution'){var g=state.goals.find(function(x){return x.id===target});if(g&&num('x-value')>0)g.saved=Number(g.saved||0)+num('x-value')}
- if(kind==='payment'){var d=state.debts.find(function(x){return x.id===target}),v=num('x-value');if(d&&v>0){d.remaining=Math.max(0,d.remaining-v);state.transactions.push({id:id(),type:'expense',amount:v,description:'Pagamento: '+d.name,category:'Dívidas',date:isoDate()})}}
+ if(kind==='transaction'){
+  var count=$('#form-type').value==='income'?1:Math.max(1,Math.min(36,Number($('#form-installments').value)||1)),amount=num('form-amount'),desc=txt('form-description'),date=$('#form-date').value;
+  if(!desc||!date||!Number.isFinite(amount)||amount<=0){toast('Confira descrição, data e valor.');return}
+  var base={type:$('#form-type').value,description:desc,category:$('#form-category').value,date:date,account:txt('form-account')||'Conta principal',cardId:$('#form-type').value==='income'?'':($('#form-card').value||''),notes:txt('form-notes')};
+  if(target||targetGroup){if(targetGroup)state.transactions=state.transactions.filter(function(t){return t.installmentGroup!==targetGroup});else state.transactions=state.transactions.filter(function(t){return t.id!==target})}
+  var group=count>1?(targetGroup||id()):'',generated=makeInstallmentTransactions(base,amount,count,group);state.transactions.push.apply(state.transactions,generated);
+ }
+ if(kind==='budget'){
+  var cat=txt('x-cat'),lim=num('x-limit'),bm=$('#x-month').value||thisMonth();if(lim<=0||!bm)return;
+  var ex=state.budgets.find(function(b){return b.category===cat&&(b.month||thisMonth())===bm&&b.id!==target});
+  if(ex){toast('Já existe orçamento para essa categoria e mês. Edite o existente.');return}
+  var budget={id:target||id(),category:cat,limit:lim,month:bm};if(target)state.budgets=state.budgets.map(function(b){return b.id===target?budget:b});else state.budgets.push(budget);
+  if($('#budget-month-picker'))$('#budget-month-picker').value=bm;
+ }
+ if(kind==='goal'){
+  var name=txt('x-name'),tar=num('x-target');if(!name||tar<=0)return;var goal={id:target||id(),name:name,target:tar,saved:num('x-saved'),due:txt('x-due')};
+  if(target)state.goals=state.goals.map(function(g){return g.id===target?goal:g});else state.goals.push(goal);
+ }
+ if(kind==='card'){
+  var cn=txt('x-name');if(!cn)return;var card={id:target||id(),name:cn,bank:txt('x-bank'),limit:num('x-limit'),startingUsed:num('x-used'),used:num('x-used'),closing:txt('x-closing'),due:txt('x-due')};
+  if(target)state.cards=state.cards.map(function(c){return c.id===target?card:c});else state.cards.push(card);
+ }
+ if(kind==='debt'){
+  var dn=txt('x-name'),dt=num('x-total'),paid=num('x-paid');if(!dn||dt<0||paid<0||paid>dt){toast('Confira o total e o valor já pago.');return}
+  var debt={id:target||id(),name:dn,total:dt,paid:paid,remaining:Math.max(0,dt-paid),installment:num('x-installment'),dueDate:txt('x-due'),notes:txt('x-notes')};
+  if(target)state.debts=state.debts.map(function(d){return d.id===target?debt:d});else state.debts.push(debt);
+ }
+ if(kind==='contribution'){var g=state.goals.find(function(x){return x.id===target}),v=num('x-value');if(g&&v>0)g.saved=Number(g.saved||0)+v}
+ if(kind==='payment'){var d=state.debts.find(function(x){return x.id===target}),v=num('x-value');if(d&&v>0){var pay=Math.min(v,Number(d.remaining||0));d.remaining=Math.max(0,Number(d.remaining||0)-pay);d.paid=Math.min(Number(d.total||0),Number(d.paid||0)+pay);state.transactions.push({id:id(),type:'expense',amount:pay,description:'Pagamento: '+d.name,category:'Dívidas',date:isoDate(),account:'Conta principal',cardId:'',notes:'Pagamento de dívida',createdAt:Date.now()})}}
  save();closeForm();renderAll();toast('Dados salvos.')
 }
 function download(blob,name){var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href)},1000)}
