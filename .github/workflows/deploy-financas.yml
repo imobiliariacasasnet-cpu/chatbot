@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "public/financas/**"
+      - "api/**"
+      - "vercel.json"
       - ".github/workflows/deploy-financas.yml"
   workflow_dispatch:
 
@@ -35,11 +37,13 @@ jobs:
           test -s public/financas/app.js
           test -s public/financas/manifest.webmanifest
           test -s public/financas/service-worker.js
+          test -s api/scan-receipt.js
           test -s public/financas/supabase.sql
           node --check public/financas/app.js
+          node --check api/scan-receipt.js
           python3 -m json.tool public/financas/manifest.webmanifest > /dev/null
           grep -q 'id="budget-month-picker"' public/financas/index.html
-          grep -q "meu-financeiro-device-v12" public/financas/service-worker.js
+          grep -q "meu-financeiro-device-v13" public/financas/service-worker.js
           echo "Sintaxe JavaScript, manifesto PWA e controles mensais validados."
           mkdir -p site
           cp -R public/financas/. site/
