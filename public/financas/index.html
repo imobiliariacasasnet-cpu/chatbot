@@ -11,24 +11,24 @@
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-<section id="auth-screen" class="auth-screen">
+<section id="auth-screen" class="auth-screen hidden">
   <div class="auth-card">
     <a href="#" class="brand auth-brand"><span class="brand-icon">M</span><span><b>Meu Financeiro</b><small>CONTROLE PESSOAL</small></span></a>
     <p class="eyebrow">CONTA LOCAL E PRIVADA</p>
-    <h1 id="auth-title">Bem-vindo de volta</h1>
-    <p class="auth-intro" id="auth-intro">Use o e-mail como identificação e crie uma senha. A conta funciona somente neste navegador; não há verificação por e-mail nem sincronização.</p>
+    <h1 id="auth-title">Importar dados antigos</h1>
+    <p class="auth-intro" id="auth-intro">Esta tela é opcional e serve apenas para recuperar dados de uma conta criada na versão anterior. O aplicativo agora abre sem login.</p>
     
     <form id="auth-form" class="auth-form">
       <label class="field-label">E-mail<input id="auth-email" type="email" autocomplete="username" required placeholder="voce@exemplo.com"></label>
       <label class="field-label">Senha<input id="auth-password" type="password" autocomplete="current-password" minlength="8" required placeholder="Sua senha (mínimo 8 caracteres)"></label>
       <button class="btn primary full auth-submit" id="auth-login" type="submit">Entrar</button>
     </form>
-    <div class="auth-actions"><button type="button" class="link-btn" id="auth-signup">Criar conta neste dispositivo</button><button type="button" class="link-btn" id="auth-forgot">Esqueci minha senha</button></div>
+    <div class="auth-actions"><button type="button" class="link-btn hidden" id="auth-signup">Criar conta neste dispositivo</button><button type="button" class="link-btn hidden" id="auth-forgot">Esqueci minha senha</button><button type="button" class="link-btn hidden" id="auth-cancel-migration">Voltar ao aplicativo sem login</button></div>
     <div id="auth-message" class="auth-message" role="status" aria-live="polite"></div>
-    <p class="auth-privacy">Seus dados são criptografados e ficam neste navegador. Não há sincronização entre dispositivos.</p>
+    <p class="auth-privacy">Após a importação, o aplicativo será aberto sem login. Os dados ficarão salvos neste navegador e não serão sincronizados automaticamente.</p>
   </div>
 </section>
-<div class="app hidden" id="app-shell">
+<div class="app" id="app-shell">
 <aside class="sidebar" id="sidebar">
 <a href="#dashboard" class="brand"><span class="brand-icon">M</span><span><b>Meu Financeiro</b><small>CONTROLE PESSOAL</small></span></a>
 <div class="nav-label">MENU PRINCIPAL</div>
@@ -74,10 +74,10 @@
 <div class="page-heading"><div><p class="eyebrow">TRAGA SEUS DADOS</p><h1>Importar extrato</h1><p class="sub">Importe arquivos do seu banco e confira antes de adicionar.</p></div></div><div class="dashboard-grid"><article class="panel import-panel"><div class="import-illustration">⇧</div><h2>Importe seu extrato</h2><p class="sub">Aceitamos CSV e OFX exportados pelo seu banco. O arquivo é processado neste navegador.</p><label class="dropzone" for="statement-file"><span>＋</span><b>Escolher arquivo</b><small>CSV ou OFX</small><input type="file" id="statement-file" accept=".csv,.ofx,.txt"></label><p class="security-note">♢ Nunca compartilhe senhas bancárias. O app não acessa diretamente sua conta.</p><div id="import-message" class="notice hidden"></div></article><article class="panel"><h2>Como funciona</h2><div class="guide"><b>1</b><div><strong>Baixe o extrato no banco</strong><p>Procure por “Exportar extrato” em CSV ou OFX.</p></div></div><div class="guide"><b>2</b><div><strong>Selecione o arquivo</strong><p>Os lançamentos serão lidos aqui no navegador.</p></div></div><div class="guide"><b>3</b><div><strong>Revise e importe</strong><p>Confira datas, descrições e valores antes de salvar.</p></div></div><a class="link-btn" href="./modelo-extrato.csv" download>Baixar modelo CSV ↗</a></article></div><article class="panel hidden" id="import-preview"><div class="panel-title"><div><h2>Prévia da importação</h2><p id="import-preview-info">Confira os lançamentos encontrados</p></div><button class="btn secondary small" id="cancel-import">Cancelar</button></div><div class="table-wrap"><table><thead><tr><th>Descrição</th><th>Data</th><th>Tipo</th><th class="align-right">Valor</th></tr></thead><tbody id="import-preview-rows"></tbody></table></div><div class="form-actions"><span id="import-duplicate-note"></span><button class="btn primary" id="confirm-import">Importar lançamentos</button></div></article>
 </section>
 <section class="page" id="page-settings">
-<div class="page-heading"><div><p class="eyebrow">PRIVACIDADE E PREFERÊNCIAS</p><h1>Configurações</h1><p class="sub">Gerencie seus dados e a conta local deste dispositivo.</p></div></div>
+<div class="page-heading"><div><p class="eyebrow">PRIVACIDADE E PREFERÊNCIAS</p><h1>Configurações</h1><p class="sub">Gerencie seus dados locais e faça backups.</p></div></div>
 <div class="settings-grid"><article class="panel"><h2>Seus dados</h2><p class="sub">Faça cópias de segurança ou restaure um backup anterior.</p><div class="setting-row"><div><b>Exportar backup</b><p>Salve lançamentos, metas, orçamentos e cartões em JSON.</p></div><button class="btn secondary" id="export-backup">Exportar</button></div><div class="setting-row"><div><b>Restaurar backup</b><p>Importe um backup JSON deste aplicativo.</p></div><label class="btn secondary file-button">Selecionar arquivo<input type="file" id="restore-file" accept=".json,application/json"></label></div><div class="setting-row danger-row"><div><b>Apagar dados locais</b><p>Remove os dados deste navegador.</p></div><button class="btn danger" id="clear-data">Apagar dados</button></div></article>
-<article class="panel"><h2>Conta local e sincronização</h2><p class="sub">Seus registros são criptografados no dispositivo. A sincronização opcional envia somente o registro criptografado para o seu projeto Supabase.</p><div class="cloud-status ready" id="cloud-status"><i></i><div><b id="cloud-status-title">Armazenamento local protegido</b><p id="cloud-status-text">Dados disponíveis neste navegador. Configure a nuvem abaixo para sincronizar.</p></div></div><div class="setting-row"><div><b>Conta atual neste dispositivo</b><p id="settings-account-email">—</p></div><button class="btn secondary" id="settings-logout" type="button">Sair da conta local</button></div>
-<div class="field-label">URL do projeto Supabase<input id="cloud-url" type="url" placeholder="https://seu-projeto.supabase.co" autocomplete="url"></div>
+<article class="panel"><h2>Armazenamento local</h2><p class="sub">O aplicativo funciona sem cadastro e guarda os dados neste navegador. Qualquer pessoa que usar o mesmo navegador poderá vê-los.</p><div class="cloud-status ready" id="cloud-status"><i></i><div><b id="cloud-status-title">Armazenamento local protegido</b><p id="cloud-status-text">Dados disponíveis neste navegador. Configure a nuvem abaixo para sincronizar.</p></div></div><div class="setting-row"><div><b>Modo de acesso</b><p id="settings-account-email">Acesso sem login</p></div><button class="btn secondary hidden" id="settings-logout" type="button">Sair da conta local</button></div><div class="setting-row hidden" id="old-account-import-row"><div><b>Dados da versão anterior</b><p>Se você já tinha uma conta com senha, importe os registros uma única vez para continuar usando o aplicativo sem login.</p></div><button class="btn secondary" id="import-old-account" type="button">Importar dados antigos</button></div>
+<div id="cloud-settings-controls" class="hidden"><div class="field-label">URL do projeto Supabase<input id="cloud-url" type="url" placeholder="https://seu-projeto.supabase.co" autocomplete="url"></div>
 <div class="field-label">Chave pública (anon / publishable)<input id="cloud-anon-key" type="password" placeholder="Chave pública do projeto" autocomplete="off"></div>
 <button class="btn secondary full" id="save-cloud-config" type="button">Salvar configuração da nuvem</button>
 <p class="helper">Use apenas a chave pública (anon/publishable). Nunca cole a chave service_role. Crie a tabela executando o arquivo supabase.sql incluído no projeto.</p>
@@ -87,8 +87,8 @@
 <div class="button-row"><button class="btn primary" id="cloud-login" type="button">Entrar na nuvem</button><button class="btn secondary" id="cloud-signup" type="button">Criar conta na nuvem</button><button class="btn secondary hidden" id="cloud-logout" type="button">Sair da nuvem</button></div>
 <div class="setting-row"><div><b>Restaurar cópia da nuvem</b><p>Baixa a cópia criptografada e pede a senha local para desbloquear. Faça backup antes de substituir dados.</p></div><button class="btn secondary" id="cloud-restore" type="button">Restaurar</button></div>
 <div class="setting-row"><div><b>Salvar e sincronizar</b><p id="cloud-message">Os dados são salvos localmente. A nuvem só fica ativa depois de configurar e entrar.</p></div><button class="btn secondary" id="cloud-sync" type="button">Sincronizar</button></div>
-<div class="setting-row hidden" id="legacy-import-row"><div><b>Dados anteriores encontrados</b><p>Importe os lançamentos antigos que estavam salvos neste navegador.</p></div><button class="btn secondary" id="import-legacy" type="button">Importar dados</button></div></article></div>
-<article class="privacy-banner"><span>♢</span><div><b>Privacidade primeiro</b><p>Não guarde senhas bancárias, números completos de cartões ou códigos de segurança. No modo local, os dados ficam no navegador e podem ser perdidos se limpar os dados do site. Para sincronização, habilite as políticas RLS do SQL incluído.</p></div></article>
+<div class="setting-row hidden" id="legacy-import-row"><div><b>Dados anteriores encontrados</b><p>Importe os lançamentos antigos que estavam salvos neste navegador.</p></div><button class="btn secondary" id="import-legacy" type="button">Importar dados</button></div></div></article></div>
+<article class="privacy-banner"><span>♢</span><div><b>Privacidade primeiro</b><p>O acesso é livre, sem senha. Os dados ficam no armazenamento deste navegador e não ficam privados de outras pessoas que usem o mesmo dispositivo. Exporte backups e evite registrar informações que não queira deixar no dispositivo.</p></div></article>
 </section>
 <footer class="footer"><span>Meu Financeiro Pessoal</span><span>Organização financeira começa com clareza.</span></footer>
 </main></div>
