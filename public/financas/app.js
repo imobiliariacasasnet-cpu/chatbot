@@ -312,6 +312,7 @@ function updateTransactionFields(){
 }
 function openForm(k,obj){
  kind=k;target=obj&&obj.id||null;targetGroup=null;
+ $('#transaction-submit').textContent='Salvar lançamento';$('#receipt-review-note').classList.add('hidden');
  $('#transaction-modal').classList.remove('hidden');
  $('#modal-title').textContent=({transaction:obj?'Editar lançamento':'Novo lançamento',budget:obj?'Editar orçamento':'Criar orçamento',goal:obj?'Editar meta financeira':'Nova meta financeira',card:obj?'Editar cartão':'Adicionar cartão',debt:obj?'Editar dívida':'Registrar dívida',contribution:'Adicionar à meta',payment:'Registrar pagamento'})[k]||'Novo registro';
  var grid=$('#transaction-form .form-grid');
@@ -338,7 +339,7 @@ function openForm(k,obj){
  }else grid.innerHTML='<label class="field-label wide">Valor (R$)<input id="x-value" type="number" min=".01" step=".01" required></label>';
 }
 function closeForm(){
- $('#transaction-modal').classList.add('hidden');$('#transaction-form .form-grid').innerHTML=fields;options('expense');populateCardOptions('');target=null;targetGroup=null;
+ $('#transaction-modal').classList.add('hidden');$('#transaction-form .form-grid').innerHTML=fields;options('expense');populateCardOptions('');target=null;targetGroup=null;$('#transaction-submit').textContent='Salvar lançamento';$('#receipt-review-note').classList.add('hidden');
 }
 function num(s){return Number($('#'+s).value||0)}function txt(s){return ($('#'+s).value||'').trim()}
 function submitForm(e){e.preventDefault();
@@ -406,6 +407,79 @@ function parseOFX(text){
 }
 function fp(t){return t.date+'|'+Number(t.amount).toFixed(2)+'|'+t.type+'|'+String(t.description).trim().toLowerCase().replace(/\s+/g,' ')}
 async function importFile(f){if(f.size>10485760){toast('O arquivo deve ter até 10 MB.');return}var text=await f.text();pending=/\.ofx$/i.test(f.name)||/<OFX>/i.test(text)?parseOFX(text):parseCSV(text);var known=new Set(state.transactions.map(fp)),dups=0;pending=pending.filter(function(t){if(known.has(fp(t))){dups++;return false}known.add(fp(t));return true});$('#import-message').classList.remove('hidden','error');$('#import-message').textContent=pending.length?pending.length+' lançamento(s) para revisar. '+(dups?dups+' duplicidade(s) provável(is) ignorada(s).':''):'Não encontrei linhas válidas. Confira o formato CSV/OFX ou use o modelo.';$('#import-message').classList.toggle('error',!pending.length);$('#import-preview').classList.toggle('hidden',!pending.length);$('#import-preview-info').textContent=pending.length+' lançamento(s) encontrados';$('#import-duplicate-note').textContent=dups?dups+' possível(is) duplicidade(s) ignorada(s).':'';$('#import-preview-rows').innerHTML=pending.slice(0,100).map(function(t){return '<tr><td>'+esc(t.description)+'</td><td>'+dateBR(t.date)+'</td><td>'+(t.type==='income'?'Receita':'Despesa')+'</td><td class="align-right">'+brl(t.amount)+'</td></tr>'}).join('')}
+function showReceiptStatus(message,isError){
+ var el=$('#receipt-scan-status');
+ el.textContent=message||'';
+ el.classList.remove('hidden');
+ el.classList.toggle('error',!!isError);
+ el.classList.toggle('success',!isError);
+}
+function compressReceiptImage(file){
+ return new Promise(function(resolve,reject){
+  if(!file||!/^image\//i.test(file.type||'')){reject(new Error('Escolha uma imagem de nota fiscal.'));return}
+  if(file.size>18*1024*1024){reject(new Error('A imagem precisa ter menos de 18 MB. Tente tirar uma foto com menor resolução.'));return}
+  var url=URL.createObjectURL(file),img=new Image();
+  img.onload=function(){
+   try{
+    var maxSide=1800,scale=Math.min(1,maxSide/Math.max(img.naturalWidth||img.width,img.naturalHeight||img.height));
+    var canvas=document.createElement('canvas');
+    canvas.width=Math.max(1,Math.round((img.naturalWidth||img.width)*scale));
+    canvas.height=Math.max(1,Math.round((img.naturalHeight||img.height)*scale));
+    var context=canvas.getContext('2d');
+    if(!context)throw new Error('Não foi possível processar a imagem neste navegador.');
+    context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);
+    context.drawImage(img,0,0,canvas.width,canvas.height);
+    var quality=.82,dataUrl='';
+    do{dataUrl=canvas.toDataURL('image/jpeg',quality);quality-=.1}while(dataUrl.length>3400000&&quality>=.52);
+    URL.revokeObjectURL(url);canvas.width=canvas.height=1;
+    if(dataUrl.length>3500000)throw new Error('A imagem ficou muito grande. Tire outra foto mais afastada ou com menor resolução.');
+    resolve(dataUrl);
+   }catch(e){URL.revokeObjectURL(url);reject(e)}
+  };
+  img.onerror=function(){URL.revokeObjectURL(url);reject(new Error('Não consegui abrir esta imagem. Tire a foto novamente ou envie um arquivo JPG, PNG ou WebP.'))};
+  img.src=url;
+ });
+}
+async function scanReceiptImage(file){
+ var button=$('#scan-receipt-button');
+ if(!file)return;
+ button.disabled=true;
+ showReceiptStatus('Lendo nota fiscal… mantenha esta página aberta.',false);
+ try{
+  var image=await compressReceiptImage(file);
+  var response=await fetch('/api/scan-receipt',{
+   method:'POST',
+   headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({image:image,today:isoDate()})
+  });
+  var payload=await response.json().catch(function(){return {error:'A API de leitura não está disponível neste endereço. Publique o aplicativo na Vercel e configure OPENAI_API_KEY.'}});
+  if(!response.ok)throw new Error(payload.error||'Não foi possível ler a nota fiscal.');
+  var receipt=payload.data||payload;
+  var amount=Number(receipt.valor);
+  if(!receipt.estabelecimento||!Number.isFinite(amount)||amount<=0)throw new Error('Não consegui identificar o valor total. Tente outra foto com o total da nota bem visível.');
+  openForm('transaction');
+  $('#modal-title').textContent='Conferir nota fiscal';
+  $('#receipt-review-note').textContent='Confira o estabelecimento, o valor, a data e a categoria. A leitura por IA pode cometer erros; nada será salvo até você confirmar.';
+  $('#receipt-review-note').classList.remove('hidden');
+  $('#form-type').value='expense';
+  options('expense');
+  $('#form-description').value=String(receipt.estabelecimento).slice(0,140);
+  $('#form-amount').value=amount.toFixed(2);
+  $('#form-date').value=/^\d{4}-\d{2}-\d{2}$/.test(String(receipt.data||''))?receipt.data:isoDate();
+  $('#form-category').value=cats.expense.indexOf(receipt.categoria)>=0?receipt.categoria:'Outras despesas';
+  $('#form-installments').value='1';
+  populateCardOptions('');
+  $('#form-card').value='';
+  $('#form-notes').value='Dados sugeridos automaticamente por leitura de nota fiscal. Confira antes de salvar.';
+  updateTransactionFields();
+  $('#transaction-submit').textContent='Salvar gasto';
+  showReceiptStatus('Leitura concluída. Confira os dados no formulário antes de salvar.',false);
+ }catch(e){
+  showReceiptStatus(e&&e.message?e.message:'Não foi possível ler a nota fiscal. Tente novamente.',true);
+ }finally{
+  button.disabled=false;
+ }
+}
 function setAuthMessage(message,isError){
  var el=$('#auth-message');el.textContent=message||'';el.classList.toggle('error',!!isError);
 }
@@ -596,6 +670,8 @@ function wire(){
  $('#restore-file').addEventListener('change',function(e){if(e.target.files[0])restoreBackup(e.target.files[0]);e.target.value=''});
  $('#clear-data').addEventListener('click',function(){if(confirm('Apagar todos os dados desta conta? Exporte um backup antes. Se a sincronização estiver conectada, o estado vazio também será enviado à nuvem.')){state=blank();save();renderAll();toast('Dados locais apagados.')}});
  $('#statement-file').addEventListener('change',function(e){if(e.target.files[0])importFile(e.target.files[0]).catch(function(){toast('Não foi possível ler o arquivo.')})});
+  $('#scan-receipt-button').addEventListener('click',function(){$('#receipt-image-input').click()});
+  $('#receipt-image-input').addEventListener('change',function(e){var selected=e.target.files&&e.target.files[0];if(selected)scanReceiptImage(selected);e.target.value=''});
  $('#cancel-import').addEventListener('click',function(){pending=[];$('#import-preview').classList.add('hidden')});
  $('#confirm-import').addEventListener('click',function(){if(!pending.length)return;var count=0,seen=new Set(state.transactions.map(fp));pending.forEach(function(t){var k=fp(t);if(!seen.has(k)){seen.add(k);state.transactions.push(t);count++}});pending=[];save();$('#import-preview').classList.add('hidden');$('#statement-file').value='';$('#import-message').classList.add('hidden');renderAll();toast(count+' lançamento(s) importado(s).')});
  $('#auth-form').addEventListener('submit',login);$('#auth-signup').addEventListener('click',createAccount);$('#auth-forgot').addEventListener('click',forgotPassword);$('#import-old-account').addEventListener('click',startLegacyMigration);$('#auth-cancel-migration').addEventListener('click',cancelLegacyMigration);
