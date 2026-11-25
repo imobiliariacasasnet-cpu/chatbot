@@ -41,5 +41,26 @@ Abra `http://localhost:8000`.
 O fluxo `.github/workflows/deploy-financas.yml` publica os arquivos estáticos via GitHub Pages:
 `https://imobiliariacasasnet-cpu.github.io/chatbot/`.
 
+
+## Escanear nota fiscal com IA
+
+O botão **Escanear Nota Fiscal** abre a câmera traseira em celulares compatíveis ou permite selecionar uma imagem. A imagem é reduzida no navegador e enviada para a rota de servidor `api/scan-receipt.js`, que chama a OpenAI Responses API e retorna os campos estruturados. O app preenche o formulário de despesa, mas **não salva nada até você revisar e clicar em Salvar gasto**.
+
+### Configuração obrigatória na Vercel
+
+Este recurso precisa da hospedagem Vercel, pois o GitHub Pages publica somente os arquivos estáticos e não executa a rota segura de API.
+
+1. Importe este repositório na Vercel usando a raiz do repositório. O arquivo `vercel.json` já mantém `public/financas` como diretório do site e configura a função `api/scan-receipt.js`.
+2. No painel da Vercel, abra **Project → Settings → Environment Variables** e crie:
+   - `OPENAI_API_KEY`: sua chave secreta da OpenAI. Ela fica apenas no servidor; nunca a coloque em `app.js`.
+   - `APP_ORIGIN`: a origem exata do site publicado, por exemplo `https://seu-projeto.vercel.app`, sem caminho ou barra no final.
+   - `OPENAI_RECEIPT_MODEL`: opcional; padrão `gpt-4o-mini`.
+3. Faça um novo deploy depois de cadastrar as variáveis.
+4. Abra o site pela URL da Vercel e teste **Escanear Nota Fiscal**. A rota usa Structured Outputs com JSON Schema, valida o conteúdo e limita tamanho, origem e frequência por instância.
+
+A imagem da nota é enviada à OpenAI para análise; ela não é salva pelo nosso código de aplicação. O endpoint responde com `Cache-Control: no-store` e a chamada usa `store: false`. A leitura é uma sugestão: sempre confira estabelecimento, valor, data e categoria antes de salvar. A proteção de frequência incluída é básica por instância serverless; para um aplicativo público com uso intenso, adicione rate limiting persistente ou proteção WAF para evitar consumo abusivo da API.
+
+O endereço GitHub Pages continuará servindo o restante do aplicativo, mas **a leitura inteligente não funciona no domínio `github.io`**, porque ali não existe a função `/api/scan-receipt`. Use a URL da Vercel para essa funcionalidade.
+
 ## Importação CSV / OFX
 O app não se conecta diretamente ao banco. Exporte um arquivo do internet banking e importe-o. O CSV deve conter colunas de data, descrição, valor e, opcionalmente, tipo e categoria. Os formatos variam por banco; revise a prévia antes de confirmar. Nunca envie senhas bancárias.
