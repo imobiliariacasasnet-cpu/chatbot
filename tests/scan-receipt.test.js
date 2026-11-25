@@ -37,6 +37,9 @@ test.beforeEach(() => {
   delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
   delete process.env.VERCEL_URL;
   delete process.env.OPENAI_API_KEY;
+  delete process.env.AI_GATEWAY_API_KEY;
+  delete process.env.VERCEL_OIDC_TOKEN;
+  delete process.env.VERCEL;
   delete process.env.OPENAI_RECEIPT_MODEL;
 });
 
@@ -63,7 +66,63 @@ test("retorna 503 quando a chave da OpenAI não está configurada", async () => 
   await handler(req, res);
 
   assert.equal(res.statusCode, 503);
-  assert.match(res.json().error, /OPENAI_API_KEY/);
+  assert.match(res.json().error, /credenciais no servidor|AI_GATEWAY_API_KEY/);
+});
+
+test("usa OIDC da Vercel pelo AI Gateway sem exigir OPENAI_API_KEY", async () => {
+  process.env.VERCEL = "1";
+  const originalFetch = global.fetch;
+  let capturedRequest;
+
+  global.fetch = async (url, options) => {
+    capturedRequest = { url, options };
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          output_text: JSON.stringify({
+            estabelecimento: "Padaria Exemplo",
+            valor: 18.9,
+            data: "2026-11-25",
+            categoria: "Alimentação",
+          }),
+        };
+      },
+    };
+  };
+
+  try {
+    const req = makeRequest({
+      headers: {
+        origin: "https://finance.test",
+        "x-real-ip": "gateway-oidc-test",
+        "x-vercel-oidc-token": "test-vercel-oidc-token",
+      },
+      body: {
+        image: "data:image/jpeg;base64," + "A".repeat(200),
+        today: "2026-11-25",
+      },
+    });
+    const res = makeResponse();
+    await handler(req, res);
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(capturedRequest.url, "https://ai-gateway.vercel.sh/v1/responses");
+    assert.equal(capturedRequest.options.headers.Authorization, "Bearer test-vercel-oidc-token");
+    const requestBody = JSON.parse(capturedRequest.options.body);
+    assert.equal(requestBody.model, "openai/gpt-4o-mini");
+    assert.equal(requestBody.store, false);
+    assert.equal(requestBody.text.format.type, "json_schema");
+    assert.deepEqual(res.json().data, {
+      estabelecimento: "Padaria Exemplo",
+      valor: 18.9,
+      data: "2026-11-25",
+      categoria: "Alimentação",
+    });
+  } finally {
+    global.fetch = originalFetch;
+  }
 });
 
 test("rejeita imagem inválida antes de chamar a OpenAI", async () => {
