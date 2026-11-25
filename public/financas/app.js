@@ -64,7 +64,7 @@ function save(){
    toast('Não foi possível salvar. Exporte um backup.');
    return false;
   });
-  return true;
+  return saveQueue;
  }
  var email=activeEmail,key=cryptoKey,snapshot=JSON.stringify(state);
  saveQueue=saveQueue.catch(function(){return false}).then(async function(){
@@ -77,7 +77,7 @@ function save(){
   $('#cloud-message').textContent='Salvo localmente com criptografia.';
   if(cloudClient&&cloudSession&&normalizeEmail(cloudSession.user.email)===email){
    try{await uploadEncryptedCloudRecord(email,accounts[email]);$('#storage-label').textContent='Sincronizado na nuvem';$('#cloud-message').textContent='Backup criptografado atualizado na nuvem.'}
-   catch(err){$('#cloud-message').textContent='Salvo localmente; a nuvem falhou: '+(err.message||'confira a configuração')}
+   catch(err){$('#cloud-message').textContent='Salvo localmente; a sincronização na nuvem falhou: '+(err.message||'confira a configuração')}
   }
   return true;
  }).catch(function(e){
@@ -85,7 +85,7 @@ function save(){
   toast('Não foi possível salvar. Exporte um backup.');
   return false;
  });
- return true;
+ return saveQueue;
 }
 function gotoPage(p){$$('.page').forEach(function(e){e.classList.toggle('active',e.id==='page-'+p)});$$('.nav-link[data-page]').forEach(function(e){e.classList.toggle('active',e.dataset.page===p)});var names={dashboard:'Visão geral',transactions:'Lançamentos',budgets:'Orçamentos',goals:'Metas financeiras',cards:'Cartões e dívidas',import:'Importar extrato',settings:'Configurações'};$('#crumb-label').textContent=names[p]||p;$('#sidebar').classList.remove('open');renderAll()}
 function forMonth(m){return state.transactions.filter(function(t){return month(t.date)===m})}
@@ -312,8 +312,10 @@ function updateTransactionFields(){
 }
 function openForm(k,obj){
  kind=k;target=obj&&obj.id||null;targetGroup=null;
+ document.body.classList.add('modal-open');
  $('#transaction-submit').textContent='Salvar lançamento';$('#receipt-review-note').classList.add('hidden');
- $('#transaction-modal').classList.remove('hidden');
+ $('#transaction-modal').classList.remove('hidden');$('#transaction-modal').scrollTop=0;
+ var activeModal=$('#transaction-modal .modal');if(activeModal)activeModal.scrollTop=0;
  $('#modal-title').textContent=({transaction:obj?'Editar lançamento':'Novo lançamento',budget:obj?'Editar orçamento':'Criar orçamento',goal:obj?'Editar meta financeira':'Nova meta financeira',card:obj?'Editar cartão':'Adicionar cartão',debt:obj?'Editar dívida':'Registrar dívida',contribution:'Adicionar à meta',payment:'Registrar pagamento'})[k]||'Novo registro';
  var grid=$('#transaction-form .form-grid');
  if(k==='transaction'){
@@ -339,10 +341,11 @@ function openForm(k,obj){
  }else grid.innerHTML='<label class="field-label wide">Valor (R$)<input id="x-value" type="number" min=".01" step=".01" required></label>';
 }
 function closeForm(){
+ document.body.classList.remove('modal-open');
  $('#transaction-modal').classList.add('hidden');$('#transaction-form .form-grid').innerHTML=fields;options('expense');populateCardOptions('');target=null;targetGroup=null;$('#transaction-submit').textContent='Salvar lançamento';$('#receipt-review-note').classList.add('hidden');
 }
 function num(s){return Number($('#'+s).value||0)}function txt(s){return ($('#'+s).value||'').trim()}
-function submitForm(e){e.preventDefault();
+async function submitForm(e){e.preventDefault();var stateBefore=JSON.stringify(state);
  if(kind==='transaction'){
   var count=$('#form-type').value==='income'?1:Math.max(1,Math.min(36,Number($('#form-installments').value)||1)),amount=num('form-amount'),desc=txt('form-description'),date=$('#form-date').value;
   if(!desc||!date||!Number.isFinite(amount)||amount<=0){toast('Confira descrição, data e valor.');return}
@@ -372,7 +375,7 @@ function submitForm(e){e.preventDefault();
  }
  if(kind==='contribution'){var g=state.goals.find(function(x){return x.id===target}),v=num('x-value');if(g&&v>0)g.saved=Number(g.saved||0)+v}
  if(kind==='payment'){var d=state.debts.find(function(x){return x.id===target}),v=num('x-value');if(d&&v>0){var pay=Math.min(v,Number(d.remaining||0));d.remaining=Math.max(0,Number(d.remaining||0)-pay);d.paid=Math.min(Number(d.total||0),Number(d.paid||0)+pay);state.transactions.push({id:id(),type:'expense',amount:pay,description:'Pagamento: '+d.name,category:'Dívidas',date:isoDate(),account:'Conta principal',cardId:'',notes:'Pagamento de dívida',createdAt:Date.now()})}}
- save();closeForm();renderAll();toast('Dados salvos.')
+ var didSave=await save();if(!didSave){state=JSON.parse(stateBefore);renderAll();toast('Não foi possível confirmar o lançamento. Os dados foram restaurados; tente novamente.');return}closeForm();renderAll();toast('Lançamento salvo com sucesso.')
 }
 function download(blob,name){var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href)},1000)}
 function exportBackup(){download(new Blob([JSON.stringify({app:'Meu Financeiro Pessoal',version:1,exportedAt:new Date().toISOString(),data:state},null,2)],{type:'application/json'}),'meu-financeiro-backup-'+isoDate()+'.json');toast('Backup exportado.')}
