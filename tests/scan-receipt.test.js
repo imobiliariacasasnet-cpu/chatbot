@@ -56,7 +56,7 @@ test("bloqueia origens que não estão na lista permitida", async () => {
   assert.match(res.json().error, /Origem não autorizada/);
 });
 
-test("retorna 503 quando a chave da OpenAI não está configurada", async () => {
+test("retorna 503 quando não há chave da OpenAI, chave do Gateway ou OIDC", async () => {
   const req = makeRequest({
     headers: { origin: "https://finance.test", "x-real-ip": "missing-key-test" },
     body: { image: "data:image/jpeg;base64," + "A".repeat(200), today: "2026-11-25" },
