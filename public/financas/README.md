@@ -30,7 +30,7 @@ As contas são apenas locais. O mesmo e-mail em outro telefone, computador, nave
 4. Abra o app, entre na conta local e vá a Configurações. Informe URL e chave pública e salve.
 5. Use Entrar na nuvem ou Criar conta na nuvem com seu e-mail. O e-mail da conta Supabase deve ser igual ao e-mail da conta local para sincronização.
 6. Clique em Sincronizar para criar/atualizar a cópia remota. O Supabase recebe somente o registro criptografado da conta local.
-7. Em outro dispositivo, configure o mesmo projeto, entre na conta Supabase, informe a senha local que originalmente criptografou os dados no campo de desbloqueio e clique em Restaurar. A cópia remota substituirá os dados da conta local deste dispositivo após confirmação.
+7. Em outro dispositivo, crie primeiro uma conta local para abrir o app (ela pode começar vazia), configure o mesmo projeto e entre na conta Supabase. Informe a senha local original que criptografou o backup remoto no campo de desbloqueio e clique em Restaurar. A cópia remota substituirá a conta local desse dispositivo após confirmação.
 
 O login local e o login Supabase são camadas diferentes: a senha Supabase autentica a conta da nuvem; a senha local deriva a chave que protege os dados. Elas podem ser diferentes. Guarde a senha local com segurança: sem ela, o backup criptografado não pode ser desbloqueado. Quando estiver conectado à nuvem, as alterações locais são sincronizadas após o salvamento, desde que os e-mails correspondam. Para evitar conflitos, não edite a mesma conta simultaneamente em dois dispositivos.
 
