@@ -39,7 +39,7 @@ jobs:
           node --check public/financas/app.js
           python3 -m json.tool public/financas/manifest.webmanifest > /dev/null
           grep -q 'id="budget-month-picker"' public/financas/index.html
-          grep -q "meu-financeiro-device-v11" public/financas/service-worker.js
+          grep -q "meu-financeiro-device-v12" public/financas/service-worker.js
           echo "Sintaxe JavaScript, manifesto PWA e controles mensais validados."
           mkdir -p site
           cp -R public/financas/. site/
