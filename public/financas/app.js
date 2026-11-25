@@ -217,15 +217,35 @@ function submitForm(e){e.preventDefault();
 }
 function download(blob,name){var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href)},1000)}
 function exportBackup(){download(new Blob([JSON.stringify({app:'Meu Financeiro Pessoal',version:1,exportedAt:new Date().toISOString(),data:state},null,2)],{type:'application/json'}),'meu-financeiro-backup-'+isoDate()+'.json');toast('Backup exportado.')}
-function restoreBackup(f){var r=new FileReader();r.onload=function(){try{var o=JSON.parse(r.result),d=o.data||o;if(!Array.isArray(d.transactions))throw Error('backup inválido');if(!confirm('Substituir os dados atuais pelos dados do backup?'))return;state=Object.assign(blank(),d);save();renderAll();toast('Backup restaurado.')}catch(e){toast('Arquivo de backup inválido.')}};r.readAsText(f)}
-function parseCSV(text){var first=text.split(/\r?\n/)[0]||'',sep=(first.match(/;/g)||[]).length>(first.match(/,/g)||[]).length?';':',',rows=[],row=[],cell='',quoted=false;
- for(var i=0;i<text.length;i++){var c=text[i];if(c==='"'&&quoted&&text[i+1]==='"'){cell+='"';i++}else if(c==='"')quoted=!quoted;else if(c===sep&&!quoted){row.push(cell.trim());cell=''}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell.trim());if(row.some(Boolean))rows.push(row);row=[];cell=''}else cell+=c}if(cell.length||row.length){row.push(cell.trim());if(row.some(Boolean))rows.push(row)}if(rows.length<2)return [];
+function restoreBackup(f){
+ var r=new FileReader();r.onload=function(){try{var o=JSON.parse(r.result),d=o.data||o;if(!Array.isArray(d.transactions))throw Error('backup inválido');if(!confirm('Substituir os dados atuais pelos dados do backup?'))return;state=normalizeState(d);save();renderAll();toast('Backup restaurado.')}catch(e){toast('Arquivo de backup inválido.')}};r.readAsText(f)
+}
+function parseCSV(text){
+ var first=text.split(/\r?\n/)[0]||'',sep=(first.match(/;/g)||[]).length>(first.match(/,/g)||[]).length?';':',',rows=[],row=[],cell='',quoted=false;
+ for(var i=0;i<text.length;i++){var c=text[i];if(c==='"'&&quoted&&text[i+1]==='"'){cell+='"';i++}else if(c==='"')quoted=!quoted;else if(c===sep&&!quoted){row.push(cell.trim());cell=''}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell.trim());if(row.some(Boolean))rows.push(row);row=[];cell=''}else cell+=c}
+ if(cell.length||row.length){row.push(cell.trim());if(row.some(Boolean))rows.push(row)}
+ if(rows.length<2)return [];
  var norm=function(v){return String(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim()},head=rows.shift().map(norm),find=function(a){return head.findIndex(function(h){return a.some(function(w){return h===w||h.indexOf(w)>=0})})};
- var di=find(['data','date']),hi=find(['descricao','historico','memo','description','lancamento']),vi=find(['valor','amount']),ti=find(['tipo','type']),ci=find(['categoria','category']);
- return rows.map(function(r){var dt=r[di]||'';if(/^\d{2}\/\d{2}\/\d{4}$/.test(dt)){var p=dt.split('/');dt=p[2]+'-'+p[1]+'-'+p[0]}else if(/^\d{8}$/.test(dt))dt=dt.slice(0,4)+'-'+dt.slice(4,6)+'-'+dt.slice(6,8);
- var s=String(r[vi]||'').replace(/[R$\s]/g,'');if(s.indexOf(',')>=0&&s.indexOf('.')>=0)s=s.replace(/\./g,'').replace(',','.');else s=s.replace(',','.');var amount=Number(s),raw=norm(r[ti]||''),type=/receita|credito|credit|entrada|deposito/.test(raw)?'income':'expense';if(amount<0){amount=Math.abs(amount);type='expense'}
- return {id:id(),date:dt,type:type,amount:amount,description:(r[hi]||'Movimentação importada').trim(),category:(r[ci]||'').trim()||(type==='income'?'Outras receitas':'Outras despesas')}}).filter(function(t){return t.amount>0&&/^\d{4}-\d{2}-\d{2}$/.test(t.date)})}
-function parseOFX(text){return Array.from(text.matchAll(/<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi)).map(function(m){var get=function(tag){return (m[1].match(new RegExp('<'+tag+'>([^\\r\\n<]+)','i'))||[])[1]||''},d=get('DTPOSTED').slice(0,8),v=Number(get('TRNAMT').replace(',','.'));if(d.length!==8)return null;return {id:id(),date:d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8),type:v>=0?'income':'expense',amount:Math.abs(v),description:get('NAME')||get('MEMO')||'Movimentação OFX',category:v>=0?'Outras receitas':'Outras despesas'}}).filter(Boolean)}
+ var di=find(['data','date']),hi=find(['descricao','historico','memo','description','lancamento']),vi=find(['valor','amount','montante']),debitIdx=find(['debito','debit','saida','despesa']),creditIdx=find(['credito','credit','entrada','receita']),ti=find(['tipo','type']),ci=find(['categoria','category']);
+ function amountValue(v){var z=String(v||'').replace(/[R$\s]/g,'');if(z.indexOf(',')>=0&&z.indexOf('.')>=0)z=z.replace(/\./g,'').replace(',','.');else z=z.replace(',','.');return Number(z)}
+ return rows.map(function(r){
+  var dt=(r[di]||'').trim();if(/^\d{2}\/\d{2}\/\d{4}$/.test(dt)){var p=dt.split('/');dt=p[2]+'-'+p[1]+'-'+p[0]}else if(/^\d{8}$/.test(dt))dt=dt.slice(0,4)+'-'+dt.slice(4,6)+'-'+dt.slice(6,8);
+  var amount=0,type='expense';
+  if(vi>=0){amount=amountValue(r[vi]);var raw=norm(r[ti]||'');type=/receita|credito|credit|entrada|deposito|deposit/.test(raw)?'income':'expense';if(amount<0)type='expense'}
+  else if(debitIdx>=0||creditIdx>=0){var debit=Math.abs(amountValue(r[debitIdx]||0)),credit=Math.abs(amountValue(r[creditIdx]||0));if(credit>0){amount=credit;type='income'}else{amount=debit;type='expense'}}
+  if(amount<0)amount=Math.abs(amount);
+  return {id:id(),date:dt,type:type,amount:amount,description:(r[hi]||'Movimentação importada').trim(),category:(r[ci]||'').trim()||(type==='income'?'Outras receitas':'Outras despesas'),account:'Extrato importado',cardId:'',notes:'Importado de arquivo CSV',createdAt:Date.now()}
+ }).filter(function(t){return t.amount>0&&/^\d{4}-\d{2}-\d{2}$/.test(t.date)})
+}
+function parseOFX(text){
+ var blocks=Array.from(text.matchAll(/<STMTTRN>([\s\S]*?)(?=<STMTTRN>|<\/BANKTRANLIST>|<\/STMTRS>|<\/OFX>|$)/gi));
+ return blocks.map(function(m){
+  var get=function(tag){return (m[1].match(new RegExp('<'+tag+'>([^\\r\\n<]+)','i'))||[])[1]||''};
+  var d=get('DTPOSTED').slice(0,8),raw=String(get('TRNAMT')||'').replace(',','.'),v=Number(raw);
+  if(d.length!==8||!Number.isFinite(v))return null;
+  return {id:id(),date:d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8),type:v>=0?'income':'expense',amount:Math.abs(v),description:get('NAME')||get('MEMO')||'Movimentação OFX',category:v>=0?'Outras receitas':'Outras despesas',account:'Extrato importado',cardId:'',notes:'Importado de arquivo OFX',createdAt:Date.now()}
+ }).filter(Boolean)
+}
 function fp(t){return t.date+'|'+Number(t.amount).toFixed(2)+'|'+t.type+'|'+String(t.description).trim().toLowerCase().replace(/\s+/g,' ')}
 async function importFile(f){if(f.size>10485760){toast('O arquivo deve ter até 10 MB.');return}var text=await f.text();pending=/\.ofx$/i.test(f.name)||/<OFX>/i.test(text)?parseOFX(text):parseCSV(text);var known=new Set(state.transactions.map(fp)),dups=0;pending=pending.filter(function(t){if(known.has(fp(t))){dups++;return false}known.add(fp(t));return true});$('#import-message').classList.remove('hidden','error');$('#import-message').textContent=pending.length?pending.length+' lançamento(s) para revisar. '+(dups?dups+' duplicidade(s) provável(is) ignorada(s).':''):'Não encontrei linhas válidas. Confira o formato CSV/OFX ou use o modelo.';$('#import-message').classList.toggle('error',!pending.length);$('#import-preview').classList.toggle('hidden',!pending.length);$('#import-preview-info').textContent=pending.length+' lançamento(s) encontrados';$('#import-duplicate-note').textContent=dups?dups+' possível(is) duplicidade(s) ignorada(s).':'';$('#import-preview-rows').innerHTML=pending.slice(0,100).map(function(t){return '<tr><td>'+esc(t.description)+'</td><td>'+dateBR(t.date)+'</td><td>'+(t.type==='income'?'Receita':'Despesa')+'</td><td class="align-right">'+brl(t.amount)+'</td></tr>'}).join('')}
 function setAuthMessage(message,isError){
@@ -335,16 +355,19 @@ async function importLegacyData(){
  var raw=localStorage.getItem(LEGACY_PENDING);if(!raw)return;
  if(!confirm('Mesclar os dados antigos deste navegador com a conta '+activeEmail+'?'))return;
  try{
-   var pendingRecord=JSON.parse(raw);if(!pendingRecord||pendingRecord.email!==activeEmail)throw new Error('Backup legado pertence a outra conta.');
-   var plain=await decryptData(activeEmail,cryptoKey,pendingRecord);
-   var legacy=Object.assign(blank(),JSON.parse(plain));
-   state.transactions=state.transactions.concat(legacy.transactions||[]);
-   state.budgets=state.budgets.concat(legacy.budgets||[]);
-   state.goals=state.goals.concat(legacy.goals||[]);
-   state.cards=state.cards.concat(legacy.cards||[]);
-   state.debts=state.debts.concat(legacy.debts||[]);
-   save();var saved=await saveQueue;if(!saved)throw new Error('Não foi possível salvar os dados importados.');localStorage.removeItem(LEGACY_PENDING);renderAll();toast('Dados antigos importados e criptografados.');
- }catch(e){toast('Não foi possível importar os dados antigos.')}
+  var pendingRecord=JSON.parse(raw);if(!pendingRecord||pendingRecord.email!==activeEmail)throw new Error('Backup legado pertence a outra conta.');
+  var legacy=normalizeState(JSON.parse(await decryptData(activeEmail,cryptoKey,pendingRecord)));
+  var existing=new Set(state.transactions.map(fp)),incoming=[];
+  legacy.transactions.forEach(function(t){var key=fp(t);if(!existing.has(key)){existing.add(key);incoming.push(t)}});
+  state.transactions=state.transactions.concat(incoming);
+  function mergeRecords(current,older,keyFn){var seen=new Set(current.map(keyFn));older.forEach(function(x){var k=keyFn(x);if(!seen.has(k)){seen.add(k);current.push(x)}});return current}
+  state.budgets=mergeRecords(state.budgets,legacy.budgets,function(x){return x.id||String(x.category)+'|'+String(x.month||thisMonth())});
+  state.goals=mergeRecords(state.goals,legacy.goals,function(x){return x.id||String(x.name)});
+  state.cards=mergeRecords(state.cards,legacy.cards,function(x){return x.id||String(x.name)});
+  state.debts=mergeRecords(state.debts,legacy.debts,function(x){return x.id||String(x.name)});
+  save();var saved=await saveQueue;if(!saved)throw new Error('Não foi possível salvar os dados importados.');
+  localStorage.removeItem(LEGACY_PENDING);renderAll();toast('Dados antigos importados sem duplicar movimentações.');
+ }catch(e){toast('Não foi possível importar os dados antigos. Confira o backup e tente novamente.')}
 }
 function wire(){
  $$('.nav-link[data-page]').forEach(function(b){b.addEventListener('click',function(){gotoPage(b.dataset.page)})});$$('[data-goto]').forEach(function(b){b.addEventListener('click',function(){gotoPage(b.dataset.goto)})});
