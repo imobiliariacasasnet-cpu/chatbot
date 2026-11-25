@@ -4,8 +4,9 @@ Aplicativo web responsivo e instalável como PWA, em português e com moeda BRL.
 
 ## Recursos
 - Dashboard com receitas, despesas, saldo, taxa de economia e gráficos.
-- Lançamentos, filtros, categorias e importação de extratos CSV/OFX.
-- Orçamentos, metas financeiras, cartões e dívidas.
+- Lançamentos com edição, exclusão, contas/origens, observações, categorias e importação de extratos CSV/OFX.
+- Compras parceladas distribuídas nos meses seguintes, com vínculo opcional ao cartão e cálculo de utilização mensal do limite.
+- Orçamentos por categoria e mês, metas editáveis com contribuições, cartões editáveis e dívidas com parcelas, vencimentos e pagamentos parciais.
 - Backup e restauração por arquivo JSON.
 - Cadastro e login locais por e-mail e senha.
 - Contas locais separadas neste navegador; os dados de cada conta são criptografados com AES-GCM.
@@ -26,7 +27,7 @@ As contas são apenas locais. O mesmo e-mail em outro telefone, computador, nave
 - Exporte backups regularmente em **Configurações → Seus dados → Exportar**. O arquivo de backup JSON não é criptografado; guarde-o em local seguro.
 - A criptografia local protege os dados armazenados contra leitura casual sem a senha, mas não protege contra malware, extensões maliciosas, acesso ao navegador enquanto a conta está desbloqueada ou comprometimento do próprio dispositivo.
 - Não armazene senhas bancárias, números completos de cartão, CVV ou outros segredos.
-- Cartões são registros informativos: o app não calcula ciclo de fatura completo, parcelamentos, juros ou pagamentos automáticos.
+- Cartões não calculam ciclos completos de fatura, juros ou pagamentos automáticos; compras parceladas registram parcelas mensais estimadas a partir do valor total e não replicam regras específicas de emissores.
 - Não há integração automática Open Finance; a importação é por arquivo.
 
 ## Testar localmente
