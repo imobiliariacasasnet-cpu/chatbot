@@ -1,0 +1,20 @@
+{
+  "name": "Meu Financeiro Pessoal — GitHub",
+  "short_name": "Meu Financeiro",
+  "description": "Organize receitas, despesas, metas e orçamento pessoal.",
+  "lang": "pt-BR",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f3f0e8",
+  "theme_color": "#173c32",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
