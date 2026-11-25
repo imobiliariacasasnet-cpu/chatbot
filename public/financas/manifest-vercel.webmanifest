@@ -1,0 +1,20 @@
+{
+  "name": "Meu Financeiro Pessoal — Vercel",
+  "short_name": "Meu Financeiro",
+  "description": "Organize receitas, despesas, metas e orçamento pessoal.",
+  "lang": "pt-BR",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f1f4fa",
+  "theme_color": "#17223f",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
