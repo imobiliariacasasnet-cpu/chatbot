@@ -6,6 +6,7 @@ on:
     paths:
       - "public/financas/**"
       - "api/**"
+      - "tests/**"
       - "vercel.json"
       - ".github/workflows/deploy-financas.yml"
   workflow_dispatch:
@@ -38,9 +39,11 @@ jobs:
           test -s public/financas/manifest.webmanifest
           test -s public/financas/service-worker.js
           test -s api/scan-receipt.js
+          test -s tests/scan-receipt.test.js
           test -s public/financas/supabase.sql
           node --check public/financas/app.js
           node --check api/scan-receipt.js
+          node --test tests/scan-receipt.test.js
           python3 -m json.tool public/financas/manifest.webmanifest > /dev/null
           grep -q 'id="budget-month-picker"' public/financas/index.html
           grep -q "meu-financeiro-device-v13" public/financas/service-worker.js
