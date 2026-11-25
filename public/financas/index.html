@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#173c32">
 <meta name="description" content="Organize seu dinheiro com clareza: receitas, despesas, cartões, metas e orçamento em um só lugar.">
+<script>
+(function(){
+  var host=String(window.location.hostname||"").toLowerCase();
+  var theme=host.endsWith(".github.io")?"theme-github":"theme-vercel";
+  document.documentElement.classList.add(theme);
+  var color=document.querySelector('meta[name="theme-color"]');
+  if(color)color.content=theme==="theme-github"?"#173c32":"#17223f";
+})();
+</script>
 <title>Meu Financeiro Pessoal</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
