@@ -46,30 +46,21 @@ O fluxo `.github/workflows/deploy-financas.yml` publica os arquivos estáticos v
 
 O botão **Escanear Nota Fiscal** abre a câmera traseira em celulares compatíveis ou permite selecionar uma imagem. A imagem é reduzida no navegador e enviada para a rota de servidor `api/scan-receipt.js`, que chama a OpenAI Responses API e retorna os campos estruturados. O app preenche o formulário de despesa, mas **não salva nada até você revisar e clicar em Salvar gasto**.
 
-### Configuração obrigatória na Vercel
+### Configuração do leitor inteligente na Vercel
 
-Este recurso precisa da hospedagem Vercel, pois o GitHub Pages publica somente os arquivos estáticos e não executa a rota segura de API.
+Este recurso precisa da hospedagem Vercel, pois o GitHub Pages publica somente arquivos estáticos e não executa a rota segura de API.
 
-1. Importe este repositório na Vercel usando a raiz do repositório. O arquivo `vercel.json` já mantém `public/financas` como diretório do site e configura a função `api/scan-receipt.js`.
-2. No painel da Vercel, abra **Project → Settings → Environment Variables** e crie:
-   - `OPENAI_API_KEY`: sua chave secreta da OpenAI. Ela fica apenas no servidor; nunca a coloque em `app.js`.
-   - `APP_ORIGIN`: a origem exata do site publicado, por exemplo `https://seu-projeto.vercel.app`, sem caminho ou barra no final.
-   - `OPENAI_RECEIPT_MODEL`: opcional; padrão `gpt-4o-mini`.
-3. Faça um novo deploy depois de cadastrar as variáveis.
-4. Abra o site pela URL da Vercel e teste **Escanear Nota Fiscal**. A rota usa Structured Outputs com JSON Schema, valida o conteúdo e limita tamanho, origem e frequência por instância.
+A função `api/scan-receipt.js` aceita autenticação por uma destas opções, em ordem de preferência: `OPENAI_API_KEY` para a API direta da OpenAI; `AI_GATEWAY_API_KEY` para o Vercel AI Gateway; ou o token OIDC enviado pela Vercel no cabeçalho `x-vercel-oidc-token` da invocação da Function. OIDC evita manter uma chave de API fixa no projeto, desde que o projeto esteja habilitado para usar o AI Gateway.
 
-A imagem da nota é enviada à OpenAI para análise; ela não é salva pelo nosso código de aplicação. O endpoint responde com `Cache-Control: no-store` e a chamada usa `store: false`. A leitura é uma sugestão: sempre confira estabelecimento, valor, data e categoria antes de salvar. A proteção de frequência incluída é básica por instância serverless; para um aplicativo público com uso intenso, adicione rate limiting persistente ou proteção WAF para evitar consumo abusivo da API.
+1. Importe este repositório na Vercel usando a raiz do repositório. O arquivo `vercel.json` já configura a função `api/scan-receipt.js`.
+2. Preferencialmente, confirme que o OIDC do projeto e o AI Gateway estão habilitados. Se não estiverem, vá a **Project → Settings → Environment Variables** e configure `AI_GATEWAY_API_KEY` ou `OPENAI_API_KEY` como segredo do servidor. Nunca inclua uma chave no JavaScript do navegador ou no GitHub.
+3. Configure `APP_ORIGIN` apenas se for necessário, usando a origem exata do site publicado, sem caminho nem barra final.
+4. `OPENAI_RECEIPT_MODEL` é opcional. O padrão é `gpt-4o-mini`; ao usar o AI Gateway, ele é enviado como `openai/gpt-4o-mini`.
+5. Faça novo deploy e teste **Escanear Nota Fiscal** na URL da Vercel. A função usa saída estruturada JSON Schema, valida os dados e limita tamanho, origem e frequência por instância.
 
-O endereço GitHub Pages continuará servindo o restante do aplicativo, mas **a leitura inteligente não funciona no domínio `github.io`**, porque ali não existe a função `/api/scan-receipt`. Use a URL da Vercel para essa funcionalidade.
+A imagem da nota é enviada ao serviço de IA para análise e não é armazenada pelo nosso código de aplicação. A chamada usa `store: false` e a resposta usa `Cache-Control: no-store`. Sempre confira estabelecimento, valor, data e categoria antes de salvar. A proteção de frequência é básica por instância serverless; para uso público intenso, adicione rate limiting persistente ou proteção WAF.
+
+O GitHub Pages serve o restante do aplicativo, mas **a leitura inteligente não funciona no domínio `github.io`**, porque ali não existe a função `/api/scan-receipt`. Use a versão hospedada na Vercel para essa funcionalidade.
 
 ## Importação CSV / OFX
 O app não se conecta diretamente ao banco. Exporte um arquivo do internet banking e importe-o. O CSV deve conter colunas de data, descrição, valor e, opcionalmente, tipo e categoria. Os formatos variam por banco; revise a prévia antes de confirmar. Nunca envie senhas bancárias.
-
-
-## Autenticação do leitor inteligente via Vercel AI Gateway
-
-A função `api/scan-receipt.js` agora aceita três rotas de autenticação, sem expor credenciais ao navegador: `OPENAI_API_KEY` para a API direta da OpenAI; `AI_GATEWAY_API_KEY` para o Vercel AI Gateway; ou o token OIDC que a Vercel envia no cabeçalho `x-vercel-oidc-token` da invocação da Function. A preferência é pela chave direta da OpenAI, depois pela chave do AI Gateway, e por último OIDC.
-
-A opção OIDC evita manter uma chave de API fixa no projeto, mas depende de o projeto Vercel estar habilitado para usar o AI Gateway. Se a função continuar acusando ausência de credenciais, configure `AI_GATEWAY_API_KEY` nas variáveis de ambiente da Vercel ou configure `OPENAI_API_KEY` no servidor. Nunca publique uma chave no GitHub nem a inclua no JavaScript do navegador.
-
-Ao usar o AI Gateway, o nome padrão `gpt-4o-mini` é enviado como `openai/gpt-4o-mini`; o endpoint continua usando saída estruturada JSON Schema e análise de imagens.
