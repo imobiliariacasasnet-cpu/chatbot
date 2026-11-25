@@ -37,6 +37,8 @@ jobs:
           test -s public/financas/styles.css
           test -s public/financas/app.js
           test -s public/financas/manifest.webmanifest
+          test -s public/financas/manifest-github.webmanifest
+          test -s public/financas/manifest-vercel.webmanifest
           test -s public/financas/service-worker.js
           test -s api/scan-receipt.js
           test -s tests/scan-receipt.test.js
@@ -45,8 +47,10 @@ jobs:
           node --check api/scan-receipt.js
           node --test tests/scan-receipt.test.js
           python3 -m json.tool public/financas/manifest.webmanifest > /dev/null
+          python3 -m json.tool public/financas/manifest-github.webmanifest > /dev/null
+          python3 -m json.tool public/financas/manifest-vercel.webmanifest > /dev/null
           grep -q 'id="budget-month-picker"' public/financas/index.html
-          grep -q "meu-financeiro-device-v16" public/financas/service-worker.js
+          grep -q "meu-financeiro-device-v17" public/financas/service-worker.js
           echo "Sintaxe JavaScript, manifesto PWA e controles mensais validados."
           mkdir -p site
           cp -R public/financas/. site/
