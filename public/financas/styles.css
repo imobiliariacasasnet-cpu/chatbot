@@ -162,3 +162,99 @@ th{border-bottom-color:var(--line);color:#908b7f}
   .dashboard-hero-mark small{font-size:5px;letter-spacing:.7px}
 }
 @media(max-width:390px){.dashboard-hero-mark{display:none}.dashboard-hero{padding:20px 17px}}
+
+
+/* Modal and mobile transaction flow repair v15 */
+/* Keep the page behind a dialog still, while allowing the dialog itself to scroll. */
+body.modal-open{overflow:hidden;overscroll-behavior:none}
+.modal-backdrop{
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  align-items:center;
+  padding-top:max(12px,env(safe-area-inset-top));
+  padding-bottom:max(12px,env(safe-area-inset-bottom));
+}
+.modal{
+  max-height:calc(100vh - 24px);
+  max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-y;
+}
+.modal-head{
+  position:sticky;
+  top:-1px;
+  z-index:4;
+  background:var(--surface,#fffdf8);
+  padding:0 0 12px;
+}
+.modal .form-actions{
+  position:sticky;
+  bottom:-1px;
+  z-index:4;
+  display:flex;
+  gap:10px;
+  background:var(--surface,#fffdf8);
+  padding:13px 0 5px;
+  margin-top:18px;
+  border-top:1px solid var(--line,#e4ddd0);
+}
+.field-label textarea{
+  display:block;
+  min-width:0;
+  width:100%;
+  max-width:100%;
+  border:1px solid #ded6c8;
+  border-radius:6px;
+  padding:10px 11px;
+  background:var(--surface,#fffdf8);
+  color:var(--text,#1d2925);
+  font:inherit;
+  line-height:1.45;
+  resize:vertical;
+}
+.modal .form-actions .btn{min-height:42px}
+@media(max-width:760px){
+  .modal-backdrop{
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding: max(8px,env(safe-area-inset-top)) 10px max(8px,env(safe-area-inset-bottom));
+  }
+  .modal{
+    width:100%;
+    max-width:560px;
+    max-height:calc(100vh - 16px);
+    max-height:calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    padding:18px;
+    margin:auto 0;
+    border-radius:12px;
+  }
+  .modal-head{margin-bottom:15px}
+  .modal-head h2{font-size:21px}
+  .form-grid{grid-template-columns:minmax(0,1fr);gap:10px}
+  .field-label.wide{grid-column:auto}
+  .field-label input,.field-label select,.field-label textarea{
+    width:100%;
+    min-width:0;
+    min-height:44px;
+    font-size:16px;
+  }
+  .field-label textarea{min-height:68px}
+  .modal .form-actions{
+    bottom:-18px;
+    margin:18px -18px -18px;
+    padding:12px 18px calc(12px + env(safe-area-inset-bottom));
+    border-radius:0 0 12px 12px;
+    background:var(--surface,#fffdf8);
+  }
+  .modal .form-actions .btn{flex:1;min-height:46px;font-size:13px}
+}
+@media(max-width:760px) and (max-height:560px){
+  .modal-backdrop{padding-top:5px;padding-bottom:5px}
+  .modal{max-height:calc(100vh - 10px);max-height:calc(100dvh - 10px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+  .modal .form-actions{padding-top:9px}
+}
