@@ -1,6 +1,6 @@
 # Meu Financeiro Pessoal
 
-Aplicativo web responsivo e instalável como PWA, em português e com moeda BRL. Por padrão, a conta local e os dados ficam criptografados neste navegador. A sincronização em nuvem é opcional e pode ser habilitada com um projeto Supabase próprio.
+Aplicativo web responsivo e instalável como PWA, em português e com moeda BRL. Abre sem cadastro ou login e salva os dados no armazenamento local do navegador. Os dados não são sincronizados entre dispositivos; qualquer pessoa que use o mesmo navegador pode acessá-los.
 
 ## Recursos
 - Dashboard com receitas, despesas, saldo, taxa de economia e gráficos.
@@ -8,35 +8,21 @@ Aplicativo web responsivo e instalável como PWA, em português e com moeda BRL.
 - Compras parceladas distribuídas nos meses seguintes, com vínculo opcional ao cartão e cálculo de utilização mensal do limite.
 - Orçamentos por categoria e mês, metas editáveis com contribuições, cartões editáveis e dívidas com parcelas, vencimentos e pagamentos parciais.
 - Backup e restauração por arquivo JSON.
-- Cadastro e login locais por e-mail e senha.
-- Contas locais separadas neste navegador; os dados de cada conta são criptografados com AES-GCM.
-- Chave derivada da senha local com PBKDF2/SHA-256; a senha não é armazenada pelo aplicativo.
-- Sincronização opcional com Supabase: apenas o registro criptografado é enviado à nuvem; a senha de criptografia local não é enviada.
+- Acesso direto sem cadastro ou login.
+- Dados de uso atual armazenados localmente no navegador, com exportação e restauração por backup JSON.
+- Importação opcional, uma única vez, dos dados criptografados de contas locais da versão anterior; a senha antiga é solicitada apenas para essa migração.
 - Migração compatível com chaves de dados de versões anteriores do site, com deduplicação por data, tipo, descrição e valor.
 
-## Como funciona o login local
-1. Abra o aplicativo no navegador/dispositivo em que deseja guardar os dados.
-2. Escolha **Criar conta neste dispositivo**, informe um e-mail e uma senha com no mínimo 8 caracteres.
-3. Entre com o mesmo e-mail e senha sempre que voltar a usar o aplicativo.
-4. Ao sair, o conteúdo em memória é limpo. Para acessar novamente, será necessário entrar com a senha.
-5. Se houver lançamentos antigos no armazenamento local deste navegador, o primeiro cadastro perguntará se deseja importá-los para a primeira conta local.
-
-As contas são apenas locais. O mesmo e-mail em outro telefone, computador, navegador ou perfil não representa a mesma conta e não terá acesso aos mesmos dados. A lista de contas e os dados criptografados ficam no armazenamento local deste navegador.
-
-## Sincronização opcional na nuvem
-1. Crie um projeto gratuito no [Supabase](https://supabase.com/).
-2. Abra o SQL Editor do projeto e execute \`supabase.sql\` (na pasta \`public/financas\` do repositório). Ele cria a tabela \`finance_data\` com Row Level Security (RLS) para que cada usuário autenticado só acesse a própria linha.
-3. Em Project Settings / API, copie a Project URL e a chave pública \`anon\`/publishable. Nunca use a chave \`service_role\` no navegador.
-4. Abra o app, entre na conta local e vá a Configurações. Informe URL e chave pública e salve.
-5. Use Entrar na nuvem ou Criar conta na nuvem com seu e-mail. O e-mail da conta Supabase deve ser igual ao e-mail da conta local para sincronização.
-6. Clique em Sincronizar para criar/atualizar a cópia remota. O Supabase recebe somente o registro criptografado da conta local.
-7. Em outro dispositivo, crie primeiro uma conta local para abrir o app (ela pode começar vazia), configure o mesmo projeto e entre na conta Supabase. Informe a senha local original que criptografou o backup remoto no campo de desbloqueio e clique em Restaurar. A cópia remota substituirá a conta local desse dispositivo após confirmação.
-
-O login local e o login Supabase são camadas diferentes: a senha Supabase autentica a conta da nuvem; a senha local deriva a chave que protege os dados. Elas podem ser diferentes. Guarde a senha local com segurança: sem ela, o backup criptografado não pode ser desbloqueado. Quando estiver conectado à nuvem, as alterações locais são sincronizadas após o salvamento, desde que os e-mails correspondam. Para evitar conflitos, não edite a mesma conta simultaneamente em dois dispositivos.
+## Como funciona o acesso sem login
+1. Abra o aplicativo; o painel financeiro aparece diretamente, sem cadastro.
+2. Os lançamentos, orçamentos, metas, cartões e dívidas ficam salvos no navegador e dispositivo usados.
+3. Exporte backups JSON regularmente. Para abrir os mesmos dados em outro dispositivo, restaure um backup.
+4. Se você tinha dados criptografados na versão anterior, vá a Configurações e use **Importar dados antigos**. Informe a conta antiga uma única vez; depois o acesso continuará sem login.
 
 ## Limites importantes
-- Sem configurar o Supabase, o app funciona localmente e não sincroniza dados entre dispositivos.
-- Os dados locais ficam criptografados no armazenamento do navegador; limpar os dados do site, perder o dispositivo ou apagar o perfil do navegador pode remover a conta local. Exporte backups regularmente.
+- Os dados são salvos no navegador atual, sem autenticação nem separação entre pessoas que compartilhem o mesmo dispositivo. Não use em um dispositivo compartilhado para informações privadas.
+- Os dados locais podem ser perdidos se limpar os dados do site, perder o dispositivo ou apagar o perfil do navegador. Exporte backups regularmente.
+- O acesso sem login não sincroniza automaticamente os dados entre dispositivos.
 - O backup JSON exportado é legível e não fica criptografado. Guarde-o em local seguro.
 - A nuvem depende dos limites do plano Supabase utilizado. A configuração e a disponibilidade do serviço são responsabilidade da conta Supabase do usuário.
 - Não armazene senhas bancárias, números completos de cartão, CVV ou outros segredos.
