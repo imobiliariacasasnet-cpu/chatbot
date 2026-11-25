@@ -4,7 +4,16 @@ var ACCOUNT_KEY='mfp_device_accounts_v1',LEGACY_KEY='mfp_local_v1',LEGACY_PENDIN
 var $=function(s){return document.querySelector(s)},$$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s))};
 var cats={income:['Salário','Comissões','Freelance','Investimentos','Aluguel recebido','Reembolso','Outras receitas'],expense:['Moradia','Alimentação','Transporte','Contas','Saúde','Educação','Lazer','Compras','Assinaturas','Impostos','Dívidas','Cartão de crédito','Outras despesas']};
 function blank(){return {transactions:[],budgets:[],goals:[],cards:[],debts:[]}}
-function loadLegacyState(){try{return Object.assign(blank(),JSON.parse(localStorage.getItem(LEGACY_KEY)||'{}'))}catch(e){return blank()}}
+function loadLegacyState(){try{return normalizeState(JSON.parse(localStorage.getItem(LEGACY_KEY)||'{}'))}catch(e){return blank()}}
+function normalizeState(data){
+ var raw=data&&typeof data==='object'?data:{},out=Object.assign(blank(),raw);
+ out.transactions=(Array.isArray(raw.transactions)?raw.transactions:[]).filter(Boolean).map(function(t){return Object.assign({},t,{id:t.id||id(),type:t.type==='income'?'income':'expense',amount:Math.max(0,Number(t.amount||0)),description:String(t.description||t.name||'Movimentação'),category:t.category||(t.type==='income'?'Outras receitas':'Outras despesas'),date:t.date||isoDate(),account:t.account||'Conta principal',cardId:t.cardId||'',notes:t.notes||'',installmentGroup:t.installmentGroup||t.groupId||'',installmentNo:Number(t.installmentNo||t.installmentIndex||0),installments:Math.max(1,Number(t.installments||t.installmentsTotal||1)),createdAt:Number(t.createdAt||Date.now())})});
+ out.budgets=(Array.isArray(raw.budgets)?raw.budgets:[]).filter(Boolean).map(function(b){return Object.assign({},b,{id:b.id||id(),category:b.category||'Outras despesas',limit:Math.max(0,Number(b.limit||0)),month:b.month||b.period||thisMonth()})});
+ out.goals=(Array.isArray(raw.goals)?raw.goals:[]).filter(Boolean).map(function(g){return Object.assign({},g,{id:g.id||id(),name:g.name||'Meta financeira',target:Math.max(0,Number(g.target||g.total||0)),saved:Math.max(0,Number(g.saved||g.current||0)),due:g.due||g.dueDate||''})});
+ out.cards=(Array.isArray(raw.cards)?raw.cards:[]).filter(Boolean).map(function(c){var used=Math.max(0,Number(c.startingUsed!=null?c.startingUsed:(c.used||0)));return Object.assign({},c,{id:c.id||id(),name:c.name||c.bank||'Cartão',bank:c.bank||'',limit:Math.max(0,Number(c.limit||0)),startingUsed:used,used:used,closing:c.closing||c.closingDay||'',due:c.due||c.dueDay||''})});
+ out.debts=(Array.isArray(raw.debts)?raw.debts:[]).filter(Boolean).map(function(d){var debtTotal=Math.max(0,Number(d.total!=null?d.total:(d.amount||d.remaining||0)));var paid=Math.max(0,Number(d.paid!=null?d.paid:Math.max(0,debtTotal-Number(d.remaining!=null?d.remaining:debtTotal))));var remaining=Math.max(0,Number(d.remaining!=null?d.remaining:debtTotal-paid));return Object.assign({},d,{id:d.id||id(),name:d.name||'Dívida',total:debtTotal,paid:Math.min(debtTotal,paid),remaining:Math.min(debtTotal,remaining),installment:Math.max(0,Number(d.installment||0)),dueDate:d.dueDate||d.due||'',notes:d.notes||''})});
+ return out;
+}
 function id(){return crypto&&crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2)}
 function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function brl(n){return Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
@@ -54,25 +63,34 @@ function renderDash(){
 }
 function renderTransactions(){
  var q=$('#search-transactions').value.toLowerCase().trim(),type=$('#type-filter').value,m=$('#transaction-month').value;
- var arr=state.transactions.filter(function(t){return (!q||(t.description+' '+t.category).toLowerCase().indexOf(q)>=0)&&(type==='all'||t.type===type)&&(!m||month(t.date)===m)}).sort(function(a,b){return String(b.date).localeCompare(String(a.date))});
- $('#transaction-rows').innerHTML=arr.map(function(t){return '<tr><td><b>'+esc(t.description)+'</b></td><td>'+esc(t.category)+'</td><td>'+dateBR(t.date)+'</td><td><span class="badge '+t.type+'">'+(t.type==='income'?'Receita':'Despesa')+'</span></td><td class="align-right '+(t.type==='income'?'amount-income':'amount-expense')+'">'+(t.type==='income'?'+':'−')+' '+brl(t.amount)+'</td><td><button class="delete-btn" data-delete-transaction="'+esc(t.id)+'" aria-label="Excluir">×</button></td></tr>'}).join('');
+ var arr=state.transactions.filter(function(t){return (!q||(String(t.description||'')+' '+String(t.category||'')+' '+String(t.account||'')+' '+String(t.notes||'')).toLowerCase().indexOf(q)>=0)&&(type==='all'||t.type===type)&&(!m||month(t.date)===m)}).sort(function(a,b){return String(b.date).localeCompare(String(a.date))||Number(b.createdAt||0)-Number(a.createdAt||0)});
+ $('#transaction-rows').innerHTML=arr.map(function(t){
+  var detail=[t.account||'Conta principal',t.notes||'',t.installmentNo&&t.installments>1?('Parcela '+t.installmentNo+'/'+t.installments):''].filter(Boolean).map(esc).join(' · ');
+  return '<tr><td><b>'+esc(t.description)+'</b>'+(detail?'<div class="transaction-detail">'+detail+'</div>':'')+'</td><td>'+esc(t.category||'—')+'</td><td>'+dateBR(t.date)+'</td><td><span class="badge '+t.type+'">'+(t.type==='income'?'Receita':'Despesa')+'</span></td><td class="align-right '+(t.type==='income'?'amount-income':'amount-expense')+'">'+(t.type==='income'?'+':'−')+' '+brl(t.amount)+'</td><td class="row-actions"><button class="link-btn" data-edit-transaction="'+esc(t.id)+'">Editar</button><button class="delete-btn" data-delete-transaction="'+esc(t.id)+'" aria-label="Excluir">×</button></td></tr>'
+ }).join('');
  $('#transaction-empty').classList.toggle('show',!arr.length)
 }
 function renderBudgets(){
- var expenses=forMonth(thisMonth()).filter(function(t){return t.type==='expense'}),spent=total(expenses),limit=state.budgets.reduce(function(a,b){return a+Number(b.limit)},0);
+ var m=$('#budget-month-picker').value||thisMonth();$('#budget-month-picker').value=m;
+ $('#budget-month-label').textContent=new Date(m+'-01T12:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+ var expenses=forMonth(m).filter(function(t){return t.type==='expense'}),spent=total(expenses),limits=state.budgets.filter(function(b){return (b.month||thisMonth())===m}),limit=limits.reduce(function(a,b){return a+Number(b.limit||0)},0);
  $('#budget-summary').innerHTML=[['Limite mensal',brl(limit)],['Despesas do mês',brl(spent)],['Disponível',brl(limit-spent)]].map(function(x){return '<article class="metric"><div class="metric-head">'+x[0]+'</div><strong>'+x[1]+'</strong></article>'}).join('');
- $('#budgets-list').innerHTML=state.budgets.map(function(b){var v=total(expenses.filter(function(t){return t.category===b.category})),pct=b.limit?Math.min(100,v/b.limit*100):0;return '<div class="budget-row"><div class="budget-head"><div><b>'+esc(b.category)+'</b><small>'+brl(v)+' gastos de '+brl(b.limit)+'</small></div><div class="budget-amount">'+Math.round(pct)+'%<small>'+(v>b.limit?'Limite ultrapassado':brl(b.limit-v)+' restantes')+'</small></div></div><div class="budget-track"><span class="'+(v>b.limit?'over':'')+'" style="width:'+pct+'%"></span></div><div class="card-actions"><button class="link-btn" data-delete-budget="'+esc(b.id)+'">Remover</button></div></div>'}).join('');
- $('#budgets-empty').classList.toggle('show',!state.budgets.length)
+ $('#budgets-list').innerHTML=limits.map(function(b){var v=total(expenses.filter(function(t){return t.category===b.category})),pct=b.limit?Math.min(100,v/b.limit*100):0;return '<div class="budget-row"><div class="budget-head"><div><b>'+esc(b.category)+'</b><small>'+brl(v)+' gastos de '+brl(b.limit)+'</small></div><div class="budget-amount">'+Math.round(pct)+'%<small>'+(v>b.limit?'Limite ultrapassado':brl(b.limit-v)+' restantes')+'</small></div></div><div class="budget-track"><span class="'+(v>b.limit?'over':'')+'" style="width:'+pct+'%"></span></div><div class="card-actions"><button class="link-btn" data-edit-budget="'+esc(b.id)+'">Editar</button><button class="link-btn" data-delete-budget="'+esc(b.id)+'">Remover</button></div></div>'}).join('');
+ $('#budgets-empty').classList.toggle('show',!limits.length)
 }
 function renderGoals(){
- $('#goals-grid').innerHTML=state.goals.map(function(g){var pct=g.target?Math.min(100,g.saved/g.target*100):0;return '<article class="goal-card"><h3>'+esc(g.name)+'</h3><p>'+(g.due?'Meta até '+dateBR(g.due):'Seu objetivo financeiro')+'</p><div class="goal-money">'+brl(g.saved)+'</div><div class="sub">de '+brl(g.target)+' desejados</div><div class="progress" style="margin-top:13px"><span style="width:'+pct+'%"></span></div><div class="goal-foot"><span>'+Math.round(pct)+'% concluído</span><span>'+brl(Math.max(0,g.target-g.saved))+' restantes</span></div><div class="card-actions"><button class="link-btn" data-contribute-goal="'+esc(g.id)+'">＋ Adicionar valor</button><button class="link-btn" data-delete-goal="'+esc(g.id)+'">Excluir</button></div></article>'}).join('');
+ $('#goals-grid').innerHTML=state.goals.map(function(g){var pct=g.target?Math.min(100,g.saved/g.target*100):0;return '<article class="goal-card"><h3>'+esc(g.name)+'</h3><p>'+(g.due?'Meta até '+dateBR(g.due):'Seu objetivo financeiro')+'</p><div class="goal-money">'+brl(g.saved)+'</div><div class="sub">de '+brl(g.target)+' desejados</div><div class="progress" style="margin-top:13px"><span style="width:'+pct+'%"></span></div><div class="goal-foot"><span>'+Math.round(pct)+'% concluído</span><span>'+brl(Math.max(0,g.target-g.saved))+' restantes</span></div><div class="card-actions"><button class="link-btn" data-edit-goal="'+esc(g.id)+'">Editar</button><button class="link-btn" data-contribute-goal="'+esc(g.id)+'">＋ Adicionar valor</button><button class="link-btn" data-delete-goal="'+esc(g.id)+'">Excluir</button></div></article>'}).join('');
  $('#goals-empty').classList.toggle('show',!state.goals.length)
 }
 function renderCards(){
- $('#cards-grid').innerHTML=state.cards.map(function(c){return '<article class="credit-card"><div class="card-visual"><div class="chip"></div><small>'+esc(c.bank||'Cartão')+'</small><b>'+esc(c.name)+'</b><footer><span>Limite '+brl(c.limit)+'</span><span>••••</span></footer></div><div class="card-meta"><span>Disponível</span><b>'+brl(Math.max(0,c.limit-c.used))+'</b></div><div class="card-meta"><span>Fechamento</span><b>'+esc(c.closing||'—')+'</b></div><div class="card-meta"><span>Vencimento</span><b>'+esc(c.due||'—')+'</b></div><div class="card-actions"><button class="link-btn" data-delete-card="'+esc(c.id)+'">Remover cartão</button></div></article>'}).join('');
+ $('#cards-grid').innerHTML=state.cards.map(function(c){
+  var linked=total(state.transactions.filter(function(t){return t.type==='expense'&&t.cardId===c.id&&month(t.date)===thisMonth()}));
+  var used=Math.max(0,Number(c.startingUsed!=null?c.startingUsed:(c.used||0)))+linked;
+  return '<article class="credit-card"><div class="card-visual"><div class="chip"></div><small>'+esc(c.bank||'Cartão')+'</small><b>'+esc(c.name)+'</b><footer><span>Limite '+brl(c.limit)+'</span><span>••••</span></footer></div><div class="card-meta"><span>Limite utilizado neste mês</span><b>'+brl(used)+'</b></div><div class="card-meta"><span>Disponível</span><b>'+brl(Math.max(0,c.limit-used))+'</b></div><div class="card-meta"><span>Fechamento</span><b>'+esc(c.closing||'—')+'</b></div><div class="card-meta"><span>Vencimento</span><b>'+esc(c.due||'—')+'</b></div><div class="card-actions"><button class="link-btn" data-edit-card="'+esc(c.id)+'">Editar</button><button class="link-btn" data-delete-card="'+esc(c.id)+'">Remover cartão</button></div></article>'
+ }).join('');
  $('#cards-empty').classList.toggle('show',!state.cards.length);
  var debt=state.debts.reduce(function(a,d){return a+Number(d.remaining||0)},0);$('#total-debt').textContent='Total: '+brl(debt);
- $('#debts-list').innerHTML=state.debts.map(function(d){return '<div class="setting-row"><div><b>'+esc(d.name)+'</b><p>'+esc(d.notes||'Dívida registrada')+'</p></div><div><b>'+brl(d.remaining)+'</b><div class="card-actions"><button class="link-btn" data-pay-debt="'+esc(d.id)+'">Pagar</button><button class="link-btn" data-delete-debt="'+esc(d.id)+'">Excluir</button></div></div></div>'}).join('');
+ $('#debts-list').innerHTML=state.debts.map(function(d){return '<div class="setting-row"><div><b>'+esc(d.name)+'</b><p>'+esc(d.notes||'Dívida registrada')+(d.installment?' · Parcela '+brl(d.installment):'')+(d.dueDate?' · Vencimento '+dateBR(d.dueDate):'')+'</p><p>Original '+brl(d.total)+' · Pago '+brl(d.paid||0)+'</p></div><div><b>'+brl(d.remaining)+' restantes</b><div class="card-actions"><button class="link-btn" data-edit-debt="'+esc(d.id)+'">Editar</button><button class="link-btn" data-pay-debt="'+esc(d.id)+'">Pagar</button><button class="link-btn" data-delete-debt="'+esc(d.id)+'">Excluir</button></div></div></div>'}).join('');
  $('#debts-empty').classList.toggle('hidden',state.debts.length>0)
 }
 function renderSettings(){
@@ -172,10 +190,9 @@ function showAuth(message,isError){
 function enterApp(email,key,data){
  activeEmail=email;cryptoKey=key;session={user:{id:email,email:email}};
  $('#auth-password').value='';
- state=Object.assign(blank(),data||{});
+ state=normalizeState(data||{});
  $('#auth-screen').classList.add('hidden');$('#app-shell').classList.remove('hidden');
- renderAll();renderSettings();
- setAuthMessage('');
+ renderAll();renderSettings();setAuthMessage('');
 }
 async function login(e){
  if(e)e.preventDefault();
