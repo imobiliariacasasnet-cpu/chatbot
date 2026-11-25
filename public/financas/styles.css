@@ -258,3 +258,86 @@ body.modal-open{overflow:hidden;overscroll-behavior:none}
   .modal{max-height:calc(100vh - 10px);max-height:calc(100dvh - 10px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
   .modal .form-actions{padding-top:9px}
 }
+
+
+/* Separate production themes: forest green for GitHub Pages, navy/blue for Vercel */
+html.theme-github{
+  --bg:#f3f0e8;--surface:#fffdf8;--text:#1d2925;--muted:#777a70;--line:#e4ddd0;
+  --green:#1c4b40;--green-dark:#12392f;--green-soft:#e8eee6;--coral:#a96750;--coral-soft:#f5e8e1;--violet:#72768b;
+  --shadow:0 9px 27px rgba(34,43,34,.045);
+}
+html.theme-vercel{
+  --bg:#f1f4fa;--surface:#fff;--text:#19243b;--muted:#758198;--line:#dfe6f0;
+  --green:#3157a4;--green-dark:#243f7a;--green-soft:#e8eefb;--coral:#bd6748;--coral-soft:#fff0e8;--violet:#7762b6;
+  --shadow:0 9px 27px rgba(25,39,72,.055);
+}
+html.theme-github body{background:var(--bg);color:var(--text)}
+html.theme-vercel body{background:var(--bg);color:var(--text)}
+html.theme-github .sidebar{background:#152f29;border-right-color:#30483e;color:#f6f2e8}
+html.theme-github .brand-icon{background:#b89b67;color:#172f29}
+html.theme-github .sidebar .nav-link{color:#c0cbc2}
+html.theme-github .sidebar .nav-link>span{color:#a9b6aa}
+html.theme-github .sidebar .nav-link:hover{background:#203e35;color:#fffaf0}
+html.theme-github .sidebar .nav-link.active{background:#2b4b40;color:#fffaf0;box-shadow:inset 2px 0 #c0a16a}
+html.theme-github .tip{background:#1d3b33;border-color:#355449}
+html.theme-github .dashboard-hero{border-color:#2d5749;background:linear-gradient(110deg,#173c32 0%,#234c3f 72%,#294f42 100%)}
+html.theme-github .dashboard-hero .hero-eyebrow,html.theme-github .dashboard-hero-mark{color:#d2b77e}
+html.theme-github .metric.balance{background:linear-gradient(125deg,#173c32,#245344);border-color:#245344}
+html.theme-github .btn.primary{background:#1c4b40}
+html.theme-github .btn.primary:hover{background:#12392f}
+html.theme-github .link-btn{color:#8b6d3d}
+html.theme-github .scan-receipt-btn{border-color:#d8cfbe;color:#1c4b40;background:#fbf8f0}
+html.theme-github .transaction-icon,html.theme-github .empty-mark,html.theme-github .import-illustration{background:#e8eee6;color:#1c4b40}
+html.theme-github .progress span,html.theme-github .budget-track span{background:#4d8970}
+html.theme-github .card-visual{background:linear-gradient(135deg,#1d4d40,#132f29)}
+html.theme-github .modal{background:#fffdf8}
+html.theme-github .modal-head,html.theme-github .modal .form-actions{background:#fffdf8}
+html.theme-vercel .sidebar{background:#131e38;border-right-color:#2a3858;color:#f7f9ff}
+html.theme-vercel .brand{color:#f7f9ff}
+html.theme-vercel .brand-icon{background:#7da2f4;color:#10203e;box-shadow:none}
+html.theme-vercel .brand small{color:#aac0f0}
+html.theme-vercel .nav-label{color:#a8b4cf}
+html.theme-vercel .sidebar .nav-link{color:#c2cde2}
+html.theme-vercel .sidebar .nav-link>span{color:#9bafd7}
+html.theme-vercel .sidebar .nav-link:hover{background:#202e4d;color:#fff}
+html.theme-vercel .sidebar .nav-link.active{background:#293b60;color:#fff;box-shadow:inset 2px 0 #8baeff}
+html.theme-vercel .sidebar .nav-link.active>span{color:#a6c0ff}
+html.theme-vercel .sidebar .nav-link i{background:#1a2845;border-color:#3b4c70;color:#d9e3fb}
+html.theme-vercel .tip{background:#1b2a49;border-color:#36496f}
+html.theme-vercel .tip b{color:#f7f9ff}
+html.theme-vercel .tip p,html.theme-vercel .storage-indicator{color:#bdcbe5}
+html.theme-vercel .page-heading h1{color:#192b4f}
+html.theme-vercel .eyebrow{color:#5677bb}
+html.theme-vercel .btn.primary{background:#3157a4;color:white;box-shadow:0 5px 12px rgba(49,87,164,.14)}
+html.theme-vercel .btn.primary:hover{background:#243f7a}
+html.theme-vercel .btn.secondary{border-color:#d7e0ef;color:#304566;background:#fff}
+html.theme-vercel .btn.secondary:hover{background:#f5f8fe;border-color:#b6c7e8}
+html.theme-vercel .metric.balance{background:linear-gradient(125deg,#162748,#27467d);border-color:#27467d}
+html.theme-vercel .metric.balance .metric-head,html.theme-vercel .metric.balance .metric-foot{color:#dbe5fb}
+html.theme-vercel .metric-symbol{background:#edf2fc;color:#3157a4}
+html.theme-vercel .metric-symbol.green{background:#e8eefb;color:#3157a4}
+html.theme-vercel .metric-symbol.coral{background:#fff0e8;color:#bd6748}
+html.theme-vercel .metric-symbol.violet{background:#eeecfa;color:#7762b6}
+html.theme-vercel .dashboard-hero{border-color:#294678;background:linear-gradient(110deg,#152748 0%,#1e3d70 66%,#2b4d87 100%)}
+html.theme-vercel .dashboard-hero .hero-eyebrow,html.theme-vercel .dashboard-hero-mark{color:#f0c27c}
+html.theme-vercel .dashboard-hero-mark{border-color:rgba(240,194,124,.55)}
+html.theme-vercel .dashboard-hero p{color:#d3def3}
+html.theme-vercel .link-btn{color:#3157a4}
+html.theme-vercel .tag{background:#eff3fb;color:#536a94}
+html.theme-vercel .transaction-icon,html.theme-vercel .empty-mark,html.theme-vercel .import-illustration{background:#e8eefb;color:#3157a4}
+html.theme-vercel .progress span,html.theme-vercel .budget-track span{background:#527bca}
+html.theme-vercel .budget-track span.over{background:#bd6748}
+html.theme-vercel .badge.income{background:#e8eefb;color:#3157a4}
+html.theme-vercel .badge.expense{background:#fff0e8;color:#a95637}
+html.theme-vercel .dropzone{border-color:#b8c7e5;background:#f8faff}
+html.theme-vercel .dropzone>span{color:#3157a4}
+html.theme-vercel .card-visual{background:linear-gradient(135deg,#284d91,#142442)}
+html.theme-vercel .modal{background:#fff}
+html.theme-vercel .modal-head,html.theme-vercel .modal .form-actions{background:#fff}
+html.theme-vercel .scan-receipt-btn{border-color:#c7d5ee;color:#294d93;background:#f5f8fe}
+html.theme-vercel .scan-receipt-btn:hover{background:#e8eefb}
+html.theme-vercel .receipt-scan-status{border-color:#cbd8ef;background:#f0f5ff;color:#244783}
+html.theme-vercel .receipt-review-note{background:#edf3ff;border-color:#cfdbf3;color:#244783}
+html.theme-vercel .privacy-banner,html.theme-vercel .cloud-status{background:#f4f7fc;border-color:#dfe6f0}
+html.theme-vercel .notice{background:#eaf0fc;color:#244783}
+html.theme-vercel .form-actions .btn:focus-visible,html.theme-vercel button:focus-visible,html.theme-vercel input:focus-visible,html.theme-vercel select:focus-visible{outline-color:#94ace8}
