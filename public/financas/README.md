@@ -64,3 +64,12 @@ O endereço GitHub Pages continuará servindo o restante do aplicativo, mas **a 
 
 ## Importação CSV / OFX
 O app não se conecta diretamente ao banco. Exporte um arquivo do internet banking e importe-o. O CSV deve conter colunas de data, descrição, valor e, opcionalmente, tipo e categoria. Os formatos variam por banco; revise a prévia antes de confirmar. Nunca envie senhas bancárias.
+
+
+## Autenticação do leitor inteligente via Vercel AI Gateway
+
+A função `api/scan-receipt.js` agora aceita três rotas de autenticação, sem expor credenciais ao navegador: `OPENAI_API_KEY` para a API direta da OpenAI; `AI_GATEWAY_API_KEY` para o Vercel AI Gateway; ou o token OIDC que a Vercel envia no cabeçalho `x-vercel-oidc-token` da invocação da Function. A preferência é pela chave direta da OpenAI, depois pela chave do AI Gateway, e por último OIDC.
+
+A opção OIDC evita manter uma chave de API fixa no projeto, mas depende de o projeto Vercel estar habilitado para usar o AI Gateway. Se a função continuar acusando ausência de credenciais, configure `AI_GATEWAY_API_KEY` nas variáveis de ambiente da Vercel ou configure `OPENAI_API_KEY` no servidor. Nunca publique uma chave no GitHub nem a inclua no JavaScript do navegador.
+
+Ao usar o AI Gateway, o nome padrão `gpt-4o-mini` é enviado como `openai/gpt-4o-mini`; o endpoint continua usando saída estruturada JSON Schema e análise de imagens.
