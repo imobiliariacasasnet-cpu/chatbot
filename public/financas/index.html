@@ -6,7 +6,6 @@
 <meta name="theme-color" content="#173c32">
 <meta name="description" content="Organize seu dinheiro com clareza: receitas, despesas, cartões, metas e orçamento em um só lugar.">
 <title>Meu Financeiro Pessoal</title>
-<link rel="manifest" id="app-manifest" href="./manifest-github.webmanifest">
 <script>
 (function(){
   var host=String(window.location.hostname||"").toLowerCase();
@@ -14,8 +13,10 @@
   document.documentElement.classList.add(theme);
   var color=document.querySelector('meta[name="theme-color"]');
   if(color)color.content=theme==="theme-github"?"#173c32":"#17223f";
-  var manifest=document.getElementById("app-manifest");
-  if(manifest)manifest.href=theme==="theme-github"?"./manifest-github.webmanifest":"./manifest-vercel.webmanifest";
+  var manifest=document.createElement("link");
+  manifest.rel="manifest";
+  manifest.href=theme==="theme-github"?"./manifest-github.webmanifest":"./manifest-vercel.webmanifest";
+  document.head.appendChild(manifest);
 })();
 </script>
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
