@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment_retry2.outputs.page_url || steps.deployment_retry1.outputs.page_url || steps.deployment_primary.outputs.page_url }}
     steps:
       - name: Baixar o repositório
         uses: actions/checkout@v6
@@ -69,15 +69,54 @@ jobs:
           echo "::error::O artefato não ficou disponível na API após 60 segundos."
           exit 1
 
-      - name: Publicar no GitHub Pages
-        id: deployment
+      - name: Publicar no GitHub Pages (tentativa 1)
+        id: deployment_primary
+        continue-on-error: true
         uses: actions/deploy-pages@v5
         with:
           artifact_name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
 
+      - name: Aguardar antes da segunda tentativa
+        if: steps.deployment_primary.outcome == 'failure'
+        run: sleep 15
+
+      - name: Publicar no GitHub Pages (tentativa 2)
+        id: deployment_retry1
+        if: steps.deployment_primary.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+        with:
+          artifact_name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Aguardar antes da terceira tentativa
+        if: steps.deployment_retry1.outcome == 'failure'
+        run: sleep 20
+
+      - name: Publicar no GitHub Pages (tentativa 3)
+        id: deployment_retry2
+        if: steps.deployment_retry1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+        with:
+          artifact_name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Confirmar resultado do deploy
+        if: always()
+        env:
+          ATTEMPT_1: ${{ steps.deployment_primary.outcome }}
+          ATTEMPT_2: ${{ steps.deployment_retry1.outcome }}
+          ATTEMPT_3: ${{ steps.deployment_retry2.outcome }}
+        run: |
+          if [[ "$ATTEMPT_1" == "success" || "$ATTEMPT_2" == "success" || "$ATTEMPT_3" == "success" ]]; then
+            echo "GitHub Pages publicou com sucesso."
+          else
+            echo "::error::As três tentativas de publicação falharam."
+            exit 1
+          fi
+
       - name: Verificar página e arquivos publicados
         env:
-          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          PAGE_URL: ${{ steps.deployment_retry2.outputs.page_url || steps.deployment_retry1.outputs.page_url || steps.deployment_primary.outputs.page_url }}
         run: |
           set -e
           base="${PAGE_URL%/}"
