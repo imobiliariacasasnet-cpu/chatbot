@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-var ACCOUNT_KEY='mfp_device_accounts_v1',LEGACY_KEY='mfp_local_v1',LEGACY_OLD_KEYS=['meu-financeiro-pessoal-v1','meu-financeiro-pessoal-v2'],LEGACY_PENDING='mfp_legacy_pending_v1',state=blank(),session=null,activeEmail=null,cryptoKey=null,pending=[],timer=null,saveQueue=Promise.resolve();
+var ACCOUNT_KEY='mfp_device_accounts_v1',LEGACY_KEY='mfp_local_v1',LEGACY_OLD_KEYS=['meu-financeiro-pessoal-v1','meu-financeiro-pessoal-v2'],LEGACY_PENDING='mfp_legacy_pending_v1',CLOUD_CONFIG_KEY='mfp_supabase_config_v1',state=blank(),session=null,activeEmail=null,cryptoKey=null,cloudClient=null,cloudSession=null,pending=[],timer=null,saveQueue=Promise.resolve();
 var $=function(s){return document.querySelector(s)},$$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s))};
 var cats={income:['Salário','Comissões','Freelance','Investimentos','Aluguel recebido','Reembolso','Outras receitas'],expense:['Moradia','Alimentação','Transporte','Contas','Saúde','Educação','Lazer','Compras','Assinaturas','Impostos','Dívidas','Cartão de crédito','Outras despesas']};
 function blank(){return {transactions:[],budgets:[],goals:[],cards:[],debts:[]}}
@@ -42,8 +42,12 @@ function save(){
    var encrypted=await encryptData(email,key,record.salt,snapshot);
    accounts[email]=Object.assign({},record,encrypted,{updatedAt:new Date().toISOString()});
    localStorage.setItem(ACCOUNT_KEY,JSON.stringify(accounts));
-   $('#cloud-message').textContent='Salvo com criptografia neste dispositivo.';
    $('#storage-label').textContent='Salvo neste dispositivo';
+   $('#cloud-message').textContent='Salvo localmente com criptografia.';
+   if(cloudClient&&cloudSession&&normalizeEmail(cloudSession.user.email)===email){
+    try{await uploadEncryptedCloudRecord(email,accounts[email]);$('#storage-label').textContent='Sincronizado na nuvem';$('#cloud-message').textContent='Backup criptografado atualizado na nuvem.'}
+    catch(err){$('#cloud-message').textContent='Salvo localmente; a nuvem falhou: '+(err.message||'confira a configuração')}
+   }
    return true;
  }).catch(function(e){
    $('#cloud-message').textContent='Falha ao salvar neste dispositivo: '+(e.message||'erro de armazenamento');
@@ -103,6 +107,7 @@ function renderCards(){
  $('#debts-list').innerHTML=state.debts.map(function(d){return '<div class="setting-row"><div><b>'+esc(d.name)+'</b><p>'+esc(d.notes||'Dívida registrada')+(d.installment?' · Parcela '+brl(d.installment):'')+(d.dueDate?' · Vencimento '+dateBR(d.dueDate):'')+'</p><p>Original '+brl(d.total)+' · Pago '+brl(d.paid||0)+'</p></div><div><b>'+brl(d.remaining)+' restantes</b><div class="card-actions"><button class="link-btn" data-edit-debt="'+esc(d.id)+'">Editar</button><button class="link-btn" data-pay-debt="'+esc(d.id)+'">Pagar</button><button class="link-btn" data-delete-debt="'+esc(d.id)+'">Excluir</button></div></div></div>'}).join('');
  $('#debts-empty').classList.toggle('hidden',state.debts.length>0)
 }
+function readCloudConfig(){try{return JSON.parse(localStorage.getItem(CLOUD_CONFIG_KEY)||'{}')}catch(e){return {}}}
 function renderSettings(){
  var email=session&&session.user?session.user.email:'—';
  $('#settings-account-email').textContent=email;
@@ -110,22 +115,132 @@ function renderSettings(){
  $('#logout-button').classList.toggle('hidden',!session);
  $('#settings-logout').classList.toggle('hidden',!session);
  $('#cloud-sync').disabled=!session;
+ var cfg=readCloudConfig();
+ if(document.activeElement!==$('#cloud-url'))$('#cloud-url').value=cfg.url||'';
+ if(document.activeElement!==$('#cloud-anon-key'))$('#cloud-anon-key').value=cfg.anonKey||'';
+ $('#cloud-logout').classList.toggle('hidden',!cloudSession);
+ $('#cloud-login').disabled=!cloudClient;
+ $('#cloud-signup').disabled=!cloudClient;
+ $('#cloud-restore').disabled=!cloudSession;
  var pendingRecord=null;try{pendingRecord=JSON.parse(localStorage.getItem(LEGACY_PENDING)||'null')}catch(e){}
  $('#legacy-import-row').classList.toggle('hidden',!(session&&pendingRecord&&pendingRecord.email===activeEmail));
  if(session){
-   cloudStatus('Dados protegidos neste dispositivo','Criptografados e disponíveis somente neste navegador e perfil.',true);
+  if(cloudSession&&normalizeEmail(cloudSession.user.email)===activeEmail){
+   cloudStatus('Nuvem conectada','Conta autenticada; o backup remoto contém apenas dados criptografados.',true);
+   $('#storage-label').textContent='Conta protegida';
+   if(!$('#cloud-message').textContent)$('#cloud-message').textContent='Clique em Sincronizar para enviar uma cópia criptografada.';
+  }else if(cloudSession){
+   cloudStatus('Conta da nuvem diferente','Para sincronizar, use na nuvem o mesmo e-mail da conta local.',false);
    $('#storage-label').textContent='Salvo neste dispositivo';
-   $('#cloud-message').textContent='Nenhum dado é enviado para a nuvem.';
+  }else if(cloudClient){
+   cloudStatus('Supabase configurado','Entre na nuvem para habilitar sincronização entre dispositivos.',false);
+   $('#storage-label').textContent='Salvo neste dispositivo';
+   if(!$('#cloud-message').textContent)$('#cloud-message').textContent='Os dados locais continuam disponíveis sem a nuvem.';
+  }else{
+   cloudStatus('Dados protegidos neste dispositivo','Criptografados e disponíveis neste navegador. A sincronização é opcional.',true);
+   $('#storage-label').textContent='Salvo neste dispositivo';
+   if(!$('#cloud-message').textContent)$('#cloud-message').textContent='Salvo localmente com criptografia.';
+  }
  }else{
-   cloudStatus('Login necessário','Entre na conta local para acessar seus dados.',false);
-   $('#storage-label').textContent='Aguardando login';
-   $('#cloud-message').textContent='Os dados ficam somente neste dispositivo.';
+  cloudStatus('Login local necessário','Entre na conta local para acessar seus dados.',false);
+  $('#storage-label').textContent='Aguardando login';
+  if(!$('#cloud-message').textContent)$('#cloud-message').textContent='Os dados locais ficam criptografados neste dispositivo.';
  }
 }
 function cloudStatus(title,msg,ready){
  $('#cloud-status-title').textContent=title;
  $('#cloud-status-text').textContent=msg;
  $('#cloud-status').classList.toggle('ready',!!ready);
+}
+function uploadEncryptedCloudRecord(email,record){
+ if(!cloudClient||!cloudSession) return Promise.reject(new Error('Entre na conta Supabase primeiro.'));
+ if(normalizeEmail(cloudSession.user.email)!==normalizeEmail(email))return Promise.reject(new Error('O e-mail da conta Supabase deve ser igual ao e-mail local.'));
+ return cloudClient.from('finance_data').upsert({user_id:cloudSession.user.id,payload:{email:email,record:record},updated_at:new Date().toISOString()},{onConflict:'user_id'}).then(function(r){if(r.error)throw r.error;return true});
+}
+async function inspectCloudRecord(){
+ if(!cloudClient||!cloudSession)return;
+ try{
+  var r=await cloudClient.from('finance_data').select('updated_at').eq('user_id',cloudSession.user.id).maybeSingle();
+  if(r.error)throw r.error;
+  if(r.data)$('#cloud-message').textContent='Já existe um backup criptografado na nuvem. Sincronize para enviar o dispositivo atual ou restaure para baixar o backup remoto.';
+  else $('#cloud-message').textContent='Ainda não há backup na nuvem. Use Sincronizar para enviar os dados locais criptografados.';
+ }catch(e){$('#cloud-message').textContent='Não foi possível verificar a nuvem: '+(e.message||'execute o SQL do projeto')}
+}
+async function initializeCloudClient(){
+ var cfg=readCloudConfig();cloudClient=null;cloudSession=null;
+ if(!cfg.url||!cfg.anonKey){renderSettings();return}
+ if(!window.supabase||!window.supabase.createClient){cloudStatus('Biblioteca da nuvem indisponível','Verifique a internet e recarregue a página.',false);return}
+ try{
+  cloudClient=window.supabase.createClient(cfg.url,cfg.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+  var res=await cloudClient.auth.getSession();if(res.error)throw res.error;
+  cloudSession=res.data.session||null;
+  cloudClient.auth.onAuthStateChange(function(event,nextSession){
+   cloudSession=nextSession||null;
+   renderSettings();
+   if(cloudSession)setTimeout(function(){inspectCloudRecord()},0);
+  });
+  renderSettings();
+  if(cloudSession)await inspectCloudRecord();
+ }catch(e){cloudClient=null;cloudSession=null;cloudStatus('Falha na configuração da nuvem',e.message||'Confira a URL e a chave pública.',false);$('#cloud-message').textContent=e.message||'Confira a configuração.'}
+}
+async function saveCloudConfig(){
+ var url=$('#cloud-url').value.trim().replace(/\/$/,''),anonKey=$('#cloud-anon-key').value.trim();
+ if(url&&!/^https:\/\/.+/i.test(url)){toast('A URL do Supabase precisa começar com https://');return}
+ if((url&&!anonKey)||(!url&&anonKey)){toast('Informe a URL e a chave pública juntas.');return}
+ localStorage.setItem(CLOUD_CONFIG_KEY,JSON.stringify({url:url,anonKey:anonKey}));
+ await initializeCloudClient();
+ $('#cloud-message').textContent=url?'Configuração salva. Entre na conta Supabase para habilitar a sincronização.':'Configuração da nuvem removida; os dados seguem locais.';
+ toast('Configuração salva neste dispositivo.');
+}
+async function signIntoCloud(mode){
+ if(!cloudClient){toast('Configure e salve a URL e a chave pública primeiro.');return}
+ var email=normalizeEmail($('#cloud-email').value),password=$('#cloud-password').value;
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||password.length<8){$('#cloud-message').textContent='Informe e-mail válido e senha de pelo menos 8 caracteres para a conta Supabase.';return}
+ $('#cloud-message').textContent='Conectando à nuvem…';
+ try{
+  var res=mode==='signup'?await cloudClient.auth.signUp({email:email,password:password}):await cloudClient.auth.signInWithPassword({email:email,password:password});
+  if(res.error)throw res.error;
+  cloudSession=res.data.session||null;
+  if(mode==='signup'&&!cloudSession){$('#cloud-message').textContent='Conta Supabase criada. Confirme o e-mail se o projeto exigir isso e depois entre na nuvem.';renderSettings();return}
+  if(!cloudSession)throw new Error('A conta não gerou uma sessão. Verifique a confirmação de e-mail no Supabase.');
+  if(normalizeEmail(cloudSession.user.email)!==email)throw new Error('O e-mail autenticado não corresponde.');
+  renderSettings();await inspectCloudRecord();
+  toast('Conta Supabase conectada.');
+ }catch(e){$('#cloud-message').textContent='Falha na nuvem: '+(e.message||'verifique o projeto Supabase');renderSettings()}
+}
+async function syncCloudNow(){
+ if(!session){toast('Entre na conta local primeiro.');return}
+ save();var saved=await saveQueue;
+ if(!saved){toast('Falha ao salvar os dados locais.');return}
+ if(!cloudClient||!cloudSession){toast('Dados salvos localmente. Configure e entre na nuvem para sincronizar.');return}
+ try{
+  if(normalizeEmail(cloudSession.user.email)!==activeEmail)throw new Error('Use na nuvem o mesmo e-mail da conta local.');
+  var record=getDeviceAccounts()[activeEmail];
+  await uploadEncryptedCloudRecord(activeEmail,record);
+  $('#cloud-message').textContent='Backup criptografado sincronizado na nuvem.';
+  $('#storage-label').textContent='Sincronizado na nuvem';
+  toast('Dados salvos e sincronizados.');
+ }catch(e){$('#cloud-message').textContent='Dados salvos localmente; sincronização falhou: '+(e.message||'erro na nuvem');toast('Os dados locais foram salvos, mas a nuvem falhou.')}
+}
+async function restoreCloudBackup(){
+ if(!cloudClient||!cloudSession){toast('Entre na conta Supabase primeiro.');return}
+ var password=$('#cloud-encryption-password').value;
+ if(!password){$('#cloud-message').textContent='Informe a senha local de criptografia para desbloquear o backup.';return}
+ try{
+  var r=await cloudClient.from('finance_data').select('payload').eq('user_id',cloudSession.user.id).maybeSingle();
+  if(r.error)throw r.error;
+  if(!r.data||!r.data.payload)throw new Error('Não existe backup na nuvem para esta conta.');
+  var payload=r.data.payload,record=payload.record||payload,email=normalizeEmail(payload.email||record.email||cloudSession.user.email);
+  if(email!==normalizeEmail(cloudSession.user.email))throw new Error('O backup remoto não corresponde ao e-mail autenticado.');
+  var key=await deriveLocalKey(password,record.salt),plain=await decryptData(email,key,record),data=normalizeState(JSON.parse(plain));
+  if(!confirm('Substituir ou criar os dados locais de '+email+' pela cópia criptografada da nuvem? Exporte um backup local antes se houver dados que queira guardar.'))return;
+  var accounts=getDeviceAccounts();accounts[email]=Object.assign({},record,{email:email,updatedAt:new Date().toISOString()});localStorage.setItem(ACCOUNT_KEY,JSON.stringify(accounts));
+  localStorage.removeItem(LEGACY_PENDING);
+  enterApp(email,key,data);
+  $('#cloud-encryption-password').value='';
+  $('#cloud-message').textContent='Backup remoto restaurado e desbloqueado. As alterações futuras poderão sincronizar.';
+  renderSettings();toast('Backup da nuvem restaurado.');
+ }catch(e){$('#cloud-message').textContent='Não foi possível restaurar a cópia: '+(e.message||'verifique a senha local e o SQL');}
 }
 var fields='<label class="field-label">Tipo<select id="form-type"><option value="expense">Despesa</option><option value="income">Receita</option></select></label>'+
 '<label class="field-label"><span id="form-amount-label">Valor (R$)</span><input id="form-amount" type="number" min=".01" step=".01" required></label>'+
@@ -346,10 +461,8 @@ function forgotPassword(){
  setAuthMessage('Como a conta é local e criptografada, a senha não pode ser redefinida. Sem a senha, os dados só poderão ser recuperados de um backup exportado anteriormente.',true);
 }
 async function saveToDevice(){
- if(!session){toast('Entre na sua conta primeiro.');return}
- save();
- var saved=await saveQueue;
- if(saved)toast('Dados salvos neste dispositivo.');else toast('Falha ao salvar. Exporte um backup e tente novamente.')
+ if(!session){toast('Entre na sua conta local primeiro.');return}
+ await syncCloudNow();
 }
 async function logout(){
  if(!session)return;
@@ -392,8 +505,7 @@ function wire(){
  $('#add-goal').addEventListener('click',function(){openForm('goal')});$('#add-goal-empty').addEventListener('click',function(){openForm('goal')});
  $('#add-card').addEventListener('click',function(){openForm('card')});$('#add-card-empty').addEventListener('click',function(){openForm('card')});$('#add-debt').addEventListener('click',function(){openForm('debt')});
  $('#transaction-form').addEventListener('submit',submitForm);$('#close-modal').addEventListener('click',closeForm);$('#cancel-modal').addEventListener('click',closeForm);
- $('#transaction-modal').addEventListener('click',function(e){if(e.target.id==='transaction-modal')closeForm()});
- document.addEventListener('keydown',function(e){if(e.key==='Escape')closeForm()});
+ $('#transaction-modal').addEventListener('click',function(e){if(e.target.id==='transaction-modal')closeForm()});document.addEventListener('keydown',function(e){if(e.key==='Escape')closeForm()});
  document.addEventListener('click',function(e){
   var b=e.target.closest('button');if(!b)return;
   var editMap=[['data-edit-transaction','transactions','transaction'],['data-edit-budget','budgets','budget'],['data-edit-goal','goals','goal'],['data-edit-card','cards','card'],['data-edit-debt','debts','debt']];
@@ -406,10 +518,8 @@ function wire(){
      var tr=state.transactions.find(function(x){return String(x.id)===v});
      if(tr&&tr.installmentGroup)state.transactions=state.transactions.filter(function(x){return x.installmentGroup!==tr.installmentGroup});
      else state.transactions=state.transactions.filter(function(x){return String(x.id)!==v});
-    }else if(a[1]==='cards'){
-     state.transactions.forEach(function(t){if(t.cardId===v)t.cardId=''});
-     state.cards=state.cards.filter(function(x){return String(x.id)!==v});
-    }else state[a[1]]=state[a[1]].filter(function(x){return String(x.id)!==v});
+    }else if(a[1]==='cards'){state.transactions.forEach(function(t){if(t.cardId===v)t.cardId=''});state.cards=state.cards.filter(function(x){return String(x.id)!==v})}
+    else state[a[1]]=state[a[1]].filter(function(x){return String(x.id)!==v});
     save();renderAll();toast('Registro removido.');
    }
    return;
@@ -422,14 +532,19 @@ function wire(){
  $('#clear-data').addEventListener('click',function(){if(confirm('Apagar todos os dados desta conta local? Exporte um backup antes.')){state=blank();save();renderAll();toast('Dados locais apagados.')}});
  $('#statement-file').addEventListener('change',function(e){if(e.target.files[0])importFile(e.target.files[0]).catch(function(){toast('Não foi possível ler o arquivo.')})});
  $('#cancel-import').addEventListener('click',function(){pending=[];$('#import-preview').classList.add('hidden')});
- $('#confirm-import').addEventListener('click',function(){
-  if(!pending.length)return;var count=0,seen=new Set(state.transactions.map(fp));
-  pending.forEach(function(t){var k=fp(t);if(!seen.has(k)){seen.add(k);state.transactions.push(t);count++}});
-  pending=[];save();$('#import-preview').classList.add('hidden');$('#statement-file').value='';$('#import-message').classList.add('hidden');renderAll();toast(count+' lançamento(s) importado(s).');
- });
+ $('#confirm-import').addEventListener('click',function(){if(!pending.length)return;var count=0,seen=new Set(state.transactions.map(fp));pending.forEach(function(t){var k=fp(t);if(!seen.has(k)){seen.add(k);state.transactions.push(t);count++}});pending=[];save();$('#import-preview').classList.add('hidden');$('#statement-file').value='';$('#import-message').classList.add('hidden');renderAll();toast(count+' lançamento(s) importado(s).')});
  $('#auth-form').addEventListener('submit',login);$('#auth-signup').addEventListener('click',createAccount);$('#auth-forgot').addEventListener('click',forgotPassword);
- $('#logout-button').addEventListener('click',logout);$('#settings-logout').addEventListener('click',logout);$('#cloud-sync').addEventListener('click',saveToDevice);$('#import-legacy').addEventListener('click',importLegacyData);
+ $('#logout-button').addEventListener('click',logout);$('#settings-logout').addEventListener('click',logout);$('#cloud-sync').addEventListener('click',syncCloudNow);$('#import-legacy').addEventListener('click',importLegacyData);
+ $('#save-cloud-config').addEventListener('click',saveCloudConfig);
+ $('#cloud-login').addEventListener('click',function(){signIntoCloud('login')});
+ $('#cloud-signup').addEventListener('click',function(){signIntoCloud('signup')});
+ $('#cloud-logout').addEventListener('click',async function(){if(cloudClient){await cloudClient.auth.signOut()}cloudSession=null;renderSettings();$('#cloud-message').textContent='Desconectado da nuvem; a conta local continua disponível.'});
+ $('#cloud-restore').addEventListener('click',restoreCloudBackup);
 }
-function init(){wire();options('expense');state=blank();$('#app-shell').classList.add('hidden');$('#auth-screen').classList.remove('hidden');renderSettings();setAuthMessage('Crie uma conta neste dispositivo ou entre com uma conta já cadastrada aqui.',false)}
+function init(){
+ wire();options('expense');state=blank();$('#app-shell').classList.add('hidden');$('#auth-screen').classList.remove('hidden');
+ renderSettings();setAuthMessage('Crie uma conta neste dispositivo ou entre com uma conta já cadastrada aqui.',false);
+ var cfg=readCloudConfig();if(cfg.url&&cfg.anonKey)initializeCloudClient();
+}
 init();
 })();
