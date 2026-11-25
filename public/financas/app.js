@@ -1,10 +1,20 @@
 (function(){
 'use strict';
-var ACCOUNT_KEY='mfp_device_accounts_v1',LEGACY_KEY='mfp_local_v1',LEGACY_PENDING='mfp_legacy_pending_v1',state=blank(),session=null,activeEmail=null,cryptoKey=null,pending=[],timer=null,saveQueue=Promise.resolve();
+var ACCOUNT_KEY='mfp_device_accounts_v1',LEGACY_KEY='mfp_local_v1',LEGACY_OLD_KEYS=['meu-financeiro-pessoal-v1','meu-financeiro-pessoal-v2'],LEGACY_PENDING='mfp_legacy_pending_v1',state=blank(),session=null,activeEmail=null,cryptoKey=null,pending=[],timer=null,saveQueue=Promise.resolve();
 var $=function(s){return document.querySelector(s)},$$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s))};
 var cats={income:['Salário','Comissões','Freelance','Investimentos','Aluguel recebido','Reembolso','Outras receitas'],expense:['Moradia','Alimentação','Transporte','Contas','Saúde','Educação','Lazer','Compras','Assinaturas','Impostos','Dívidas','Cartão de crédito','Outras despesas']};
 function blank(){return {transactions:[],budgets:[],goals:[],cards:[],debts:[]}}
-function loadLegacyState(){try{return normalizeState(JSON.parse(localStorage.getItem(LEGACY_KEY)||'{}'))}catch(e){return blank()}}
+function loadLegacyState(){
+ var merged=blank(),keys=[LEGACY_KEY].concat(LEGACY_OLD_KEYS);
+ keys.forEach(function(key){try{var stored=localStorage.getItem(key);if(!stored)return;var data=normalizeState(JSON.parse(stored));merged.transactions=merged.transactions.concat(data.transactions);merged.budgets=merged.budgets.concat(data.budgets);merged.goals=merged.goals.concat(data.goals);merged.cards=merged.cards.concat(data.cards);merged.debts=merged.debts.concat(data.debts)}catch(e){}});
+ var seenTx=new Set();merged.transactions=merged.transactions.filter(function(t){var k=fp(t);if(seenTx.has(k))return false;seenTx.add(k);return true});
+ function unique(list,keyFn){var seen=new Set();return list.filter(function(x){var k=keyFn(x);if(seen.has(k))return false;seen.add(k);return true})}
+ merged.budgets=unique(merged.budgets,function(x){return x.id||String(x.category)+'|'+String(x.month||thisMonth())});
+ merged.goals=unique(merged.goals,function(x){return x.id||String(x.name)+'|'+String(x.target)});
+ merged.cards=unique(merged.cards,function(x){return x.id||String(x.name)+'|'+String(x.bank)});
+ merged.debts=unique(merged.debts,function(x){return x.id||String(x.name)+'|'+String(x.total)});
+ return normalizeState(merged)
+}
 function normalizeState(data){
  var raw=data&&typeof data==='object'?data:{},out=Object.assign(blank(),raw);
  out.transactions=(Array.isArray(raw.transactions)?raw.transactions:[]).filter(Boolean).map(function(t){return Object.assign({},t,{id:t.id||id(),type:t.type==='income'?'income':'expense',amount:Math.max(0,Number(t.amount||0)),description:String(t.description||t.name||'Movimentação'),category:t.category||(t.type==='income'?'Outras receitas':'Outras despesas'),date:t.date||isoDate(),account:t.account||'Conta principal',cardId:t.cardId||'',notes:t.notes||'',installmentGroup:t.installmentGroup||t.groupId||'',installmentNo:Number(t.installmentNo||t.installmentIndex||0),installments:Math.max(1,Number(t.installments||t.installmentsTotal||1)),createdAt:Number(t.createdAt||Date.now())})});
@@ -326,7 +336,7 @@ async function createAccount(){
    if(hasLegacy&&!importLegacy)pendingEncrypted=await encryptData(email,key,saltB64,JSON.stringify(legacy));
    accounts[email]={email:email,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),salt:encrypted.salt,iv:encrypted.iv,ciphertext:encrypted.ciphertext};
    localStorage.setItem(ACCOUNT_KEY,JSON.stringify(accounts));
-   if(hasLegacy){if(importLegacy)localStorage.removeItem(LEGACY_KEY);else{localStorage.setItem(LEGACY_PENDING,JSON.stringify({email:email,salt:pendingEncrypted.salt,iv:pendingEncrypted.iv,ciphertext:pendingEncrypted.ciphertext}));localStorage.removeItem(LEGACY_KEY)}}
+   if(hasLegacy){if(!importLegacy)localStorage.setItem(LEGACY_PENDING,JSON.stringify({email:email,salt:pendingEncrypted.salt,iv:pendingEncrypted.iv,ciphertext:pendingEncrypted.ciphertext}));[LEGACY_KEY].concat(LEGACY_OLD_KEYS).forEach(function(keyName){localStorage.removeItem(keyName)})}
    enterApp(email,key,firstState);
    toast('Conta criada neste dispositivo.');
  }catch(err){setAuthMessage(err.message||'Não foi possível criar a conta local.',true)}
