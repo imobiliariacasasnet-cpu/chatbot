@@ -438,7 +438,7 @@ async function createAccount(){
  if(password.length<8){setAuthMessage('Crie uma senha com pelo menos 8 caracteres.',true);return}
  var accounts=getDeviceAccounts();
  if(accounts[email]){setAuthMessage('Já existe uma conta com esse e-mail neste dispositivo. Entre com ela.',true);return}
- if(!confirm('Criar uma conta local para '+email+'? Ela só existirá neste navegador e não será sincronizada com outros dispositivos.'))return;
+ if(!confirm('Criar uma conta local para '+email+'? Os dados ficam neste navegador por padrão; depois você pode configurar uma cópia criptografada no Supabase. Guarde a senha local, pois ela é necessária para desbloquear os dados.'))return;
  $('#auth-signup').disabled=true;setAuthMessage('Criando sua conta protegida…',false);
  try{
    var salt=crypto.getRandomValues(new Uint8Array(16)),saltB64=toBase64(salt),key=await deriveLocalKey(password,saltB64);
@@ -529,7 +529,7 @@ function wire(){
  });
  $('#backup-top').addEventListener('click',exportBackup);$('#export-backup').addEventListener('click',exportBackup);
  $('#restore-file').addEventListener('change',function(e){if(e.target.files[0])restoreBackup(e.target.files[0]);e.target.value=''});
- $('#clear-data').addEventListener('click',function(){if(confirm('Apagar todos os dados desta conta local? Exporte um backup antes.')){state=blank();save();renderAll();toast('Dados locais apagados.')}});
+ $('#clear-data').addEventListener('click',function(){if(confirm('Apagar todos os dados desta conta? Exporte um backup antes. Se a sincronização estiver conectada, o estado vazio também será enviado à nuvem.')){state=blank();save();renderAll();toast('Dados locais apagados.')}});
  $('#statement-file').addEventListener('change',function(e){if(e.target.files[0])importFile(e.target.files[0]).catch(function(){toast('Não foi possível ler o arquivo.')})});
  $('#cancel-import').addEventListener('click',function(){pending=[];$('#import-preview').classList.add('hidden')});
  $('#confirm-import').addEventListener('click',function(){if(!pending.length)return;var count=0,seen=new Set(state.transactions.map(fp));pending.forEach(function(t){var k=fp(t);if(!seen.has(k)){seen.add(k);state.transactions.push(t);count++}});pending=[];save();$('#import-preview').classList.add('hidden');$('#statement-file').value='';$('#import-message').classList.add('hidden');renderAll();toast(count+' lançamento(s) importado(s).')});
