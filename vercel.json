@@ -2,5 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "buildCommand": null,
-  "outputDirectory": "public/financas"
+  "outputDirectory": "public/financas",
+  "functions": {
+    "api/scan-receipt.js": {
+      "maxDuration": 30
+    }
+  }
 }
