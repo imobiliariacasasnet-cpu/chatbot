@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Script from "next/script";
 import { Suspense } from "react";
@@ -8,6 +9,12 @@ import { ChatShell } from "@/components/chat/shell";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ActiveChatProvider } from "@/hooks/use-active-chat";
 import { auth } from "../(auth)/auth";
+
+export const metadata: Metadata = {
+  title: "Atendimento",
+  description: "Área de atendimento da Casas Net Imóveis.",
+  robots: { index: false, follow: false },
+};
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
