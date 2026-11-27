@@ -1,7 +1,14 @@
+import type { Metadata } from "next";
 import { ArrowLeftIcon } from "lucide-react";
 import Link from "next/link";
 import { SparklesIcon, VercelIcon } from "@/components/chat/icons";
 import { Preview } from "@/components/chat/preview";
+
+export const metadata: Metadata = {
+  title: "Acesso",
+  description: "Acesso à área de atendimento da Casas Net Imóveis.",
+  robots: { index: false, follow: false },
+};
 
 export default function AuthLayout({
   children,
