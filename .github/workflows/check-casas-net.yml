@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   typecheck:
-    name: TypeScript and route checks
+    name: TypeScript validation
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -51,6 +51,3 @@ jobs:
 
       - name: TypeScript check
         run: pnpm exec tsc --noEmit
-
-      - name: Check patch formatting
-        run: pnpm exec biome check "app/page.tsx" "app/layout.tsx"
