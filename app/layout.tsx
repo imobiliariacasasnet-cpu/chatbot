@@ -2,18 +2,25 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
-
 import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://chat.vercel.ai"),
-  title: "Next.js Chatbot Template",
-  description: "Next.js chatbot template using the AI SDK.",
+  metadataBase: new URL("https://www.imobiliariacasasnet.com.br"),
+  title: "Casas Net Imóveis | Seu próximo capítulo começa aqui",
+  description: "Encontre casas, apartamentos e imóveis em Cotia, Granja Viana e região com a Casas Net Imóveis. CRECI 38.227-J.",
+  applicationName: "Casas Net Imóveis",
+  openGraph: {
+    title: "Casas Net Imóveis",
+    description: "Seu próximo capítulo começa aqui.",
+    locale: "pt_BR",
+    type: "website",
+  },
 };
 
 export const viewport = {
-  maximumScale: 1,
+  maximumScale: 5,
+  themeColor: "#181916",
 };
 
 const geist = Geist({
@@ -21,7 +28,6 @@ const geist = Geist({
   display: "swap",
   variable: "--font-geist",
 });
-
 const geistMono = Geist_Mono({
   subsets: ["latin"],
   display: "swap",
@@ -30,8 +36,7 @@ const geistMono = Geist_Mono({
 
 const LIGHT_THEME_COLOR = "hsl(0 0% 100%)";
 const DARK_THEME_COLOR = "hsl(240deg 10% 3.92%)";
-const THEME_COLOR_SCRIPT = `\
-(function() {
+const THEME_COLOR_SCRIPT = `(function() {
   var html = document.documentElement;
   var meta = document.querySelector('meta[name="theme-color"]');
   if (!meta) {
@@ -48,35 +53,15 @@ const THEME_COLOR_SCRIPT = `\
   updateThemeColor();
 })();`;
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html
-      className={`${geist.variable} ${geistMono.variable}`}
-      lang="en"
-      suppressHydrationWarning
-    >
+    <html className={`${geist.variable} ${geistMono.variable}`} lang="pt-BR" suppressHydrationWarning>
       <head>
-        <script
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: "Required"
-          dangerouslySetInnerHTML={{
-            __html: THEME_COLOR_SCRIPT,
-          }}
-        />
+        <script dangerouslySetInnerHTML={{ __html: THEME_COLOR_SCRIPT }} />
       </head>
       <body className="antialiased">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          disableTransitionOnChange
-          enableSystem
-        >
-          <SessionProvider
-            basePath={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/auth`}
-          >
+        <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange enableSystem={false}>
+          <SessionProvider basePath={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/auth`}>
             <TooltipProvider>{children}</TooltipProvider>
           </SessionProvider>
         </ThemeProvider>
