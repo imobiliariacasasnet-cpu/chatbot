@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
+import "./casas-net.css";
 import { SessionProvider } from "next-auth/react";
 
 export const metadata: Metadata = {
