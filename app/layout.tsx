@@ -7,13 +7,33 @@ import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://chat.vercel.ai"),
-  title: "Next.js Chatbot Template",
-  description: "Next.js chatbot template using the AI SDK.",
+  metadataBase: new URL("https://www.imobiliariacasasnet.com.br"),
+  title: {
+    default: "Casas Net Imóveis | Seu próximo capítulo começa aqui",
+    template: "%s | Casas Net Imóveis",
+  },
+  description:
+    "Encontre casas, apartamentos e imóveis em Cotia, Granja Viana e região com a Casas Net Imóveis. CRECI 38.227-J.",
+  applicationName: "Casas Net Imóveis",
+  openGraph: {
+    title: "Casas Net Imóveis | Seu próximo capítulo começa aqui",
+    description:
+      "Encontre seu próximo imóvel em Cotia, Granja Viana e região com a Casas Net Imóveis.",
+    url: "https://www.imobiliariacasasnet.com.br/",
+    siteName: "Casas Net Imóveis",
+    locale: "pt_BR",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Casas Net Imóveis",
+    description:
+      "Encontre seu próximo imóvel em Cotia, Granja Viana e região.",
+  },
 };
 
 export const viewport = {
-  maximumScale: 1,
+  maximumScale: 5,
 };
 
 const geist = Geist({
@@ -56,7 +76,7 @@ export default function RootLayout({
   return (
     <html
       className={`${geist.variable} ${geistMono.variable}`}
-      lang="en"
+      lang="pt-BR"
       suppressHydrationWarning
     >
       <head>
